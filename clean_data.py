@@ -1,6 +1,9 @@
 from pathlib import Path
 import pandas as pd
 import os
+import re
+from datetime import datetime as dt
+
 raw_weather_type = ['薄曇','晴れ','くもり','少雨','弱い雨','強い雨','激しい雨','猛烈な雨','みぞれ(弱い)','雪 (強い)','雪 (弱い)','みぞれ(強い)']
 weather_type = ['light cloud', 'sunny', 'cloudy', 'light rain', 'light rain', 'strong rain', 'heavy rain', 'heavy rain', 'sleet (weak)', 'snow (heavy)' ,'snow (weak)','sleet (strong)']
 start_date = ["20220301","20230101"]
@@ -84,13 +87,15 @@ def xlsx_process(path):
             sample["time"] = data["時刻"]
             
             for solar_panel in data.index:
-                
+
                 if (solar_panel == "30101:電力量（Wh）"):
-                    sample["power_consumption"] = data[solar_panel]
+                    sample["power_usage"] = data[solar_panel]
                 elif (solar_panel == "30101:回生電力量（Wh）"):
                     sample["power_surplus"] = data[solar_panel]
                 elif (len(str(solar_panel)) > 2):
-                    sample[solar_panel] = data[solar_panel]
+                    solar_panel_num = re.findall(r"\d+", solar_panel)[0]
+
+                    sample[solar_panel_num] = data[solar_panel]
         
             result.append(sample)
     
@@ -119,8 +124,9 @@ def clean_dataset(args):
 
     station_data = pd.merge(xlsx_data, csv_data, how = "outer", on = ["date", "time"])
     station_data[["year", "month", "day"]] = station_data.date.str.split("-", expand = True)
-    station_data = station_data.drop(columns = ["date"])
-    
+    station_data["date"] = pd.to_datetime(station_data["date"])
+    station_data["weekday"] = station_data["date"].dt.dayofweek
+
     return station_data
         
 

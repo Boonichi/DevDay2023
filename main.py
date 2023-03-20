@@ -30,7 +30,7 @@ def get_args_parser():
     # Process
     parser.add_argument('--prepare_data', action="store_true", 
                         help = "Prepare data")
-    # Intial parameters
+    # Train parameters
     parser.add_argument('--batch_size', default=32, type=int,
                         help='Per GPU batch size')
     parser.add_argument('--epochs', default=50, type=int)
@@ -60,26 +60,26 @@ def get_args_parser():
                         help="Dataset output path")
     parser.add_argument('--eval_data_path', default=None, type=str,
                         help='dataset path for evaluation')
-    parser.add_argument('--nb_classes', default=2, type=int,
-                        help='number of the classification types')
     parser.add_argument('--output_dir', default='',
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='mps',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--name', default='', type=str)
+    parser.add_argument('--max_encoder_len', default = 2, type = int)
+    parser.add_argument('--max_pred_len', default = 2, type = int)
     
     # Prepare process params
     parser.add_argument("--imputation", default = "mean_most_impute", type = str,
                         help ="Identify imputation techniques")
     parser.add_argument("--impute_na", default = "remove", type = str,
                         help="Remove all row that include NaN value")
-    # Encoder/Normalizer parameters
 
     return parser
 
 def main(args):
     print(args)
+    # Intialize device
     device = torch.device(args.device)
 
     #Fix the seed for reproducibility
@@ -89,6 +89,12 @@ def main(args):
     
     if args.prepare_data:
         prepare_dataset(args)
+    if args.train:
+        pass
+    if args.test:
+        pass
+    if args.verbose:
+        pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('Solar Model for forecasting task', parents=[get_args_parser()])
