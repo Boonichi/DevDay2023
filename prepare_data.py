@@ -10,7 +10,7 @@ from utils import fcall
 
 class SolarProcess():
     def __init__(self, args):
-        self.dataset = args
+        self.args = args
 
     def remove_outlier(self,dataset):
         def outlier(row):
@@ -19,7 +19,7 @@ class SolarProcess():
             else:
                 result = row
             return result
-        columns = ["power_consumption", "power_surplus"]
+        columns = ["power_usage", "power_surplus"]
         for col in columns:
             dataset[col] = dataset[col].apply(lambda row: outlier(row))
         
@@ -40,6 +40,8 @@ class SolarProcess():
     def impute_na(self,dataset):
         if self.args.impute_na == "remove":
             return dataset.dropna().reset_index(drop = True)
+        elif self.args.impute_na == "fill_zero":
+            return dataset.fillna(value = 0)
 
     def normalize_data(self,dataset):
         
@@ -65,7 +67,7 @@ def prepare_dataset(args):
     Process= SolarProcess(args)
 
     prepared_data = Process.parse(dataset)
-
+    
     prepared_data.to_csv(args.data_output_dir)
 
     

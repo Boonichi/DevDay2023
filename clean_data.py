@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import re
 from datetime import datetime as dt
+from pandas import Timestamp
 
 raw_weather_type = ['薄曇','晴れ','くもり','少雨','弱い雨','強い雨','激しい雨','猛烈な雨','みぞれ(弱い)','雪 (強い)','雪 (弱い)','みぞれ(強い)']
 weather_type = ['light cloud', 'sunny', 'cloudy', 'light rain', 'light rain', 'strong rain', 'heavy rain', 'heavy rain', 'sleet (weak)', 'snow (heavy)' ,'snow (weak)','sleet (strong)']
@@ -43,7 +44,7 @@ def csv_process(dataset):
         
         #Target Date
         date, time = target_date(data["target_date"])
-        sample["date"] = date
+        sample["date"] = date + " " + time + ":00" 
         sample["time"] = time
         
         #Features
@@ -83,7 +84,7 @@ def xlsx_process(path):
 
         for index, data in df_new.iterrows():
             sample = dict()
-            sample["date"] = sheet_name
+            sample["date"] = sheet_name + " " + data["時刻"] + ":00"
             sample["time"] = data["時刻"]
             
             for solar_panel in data.index:
@@ -95,7 +96,7 @@ def xlsx_process(path):
                 elif (len(str(solar_panel)) > 2):
                     solar_panel_num = re.findall(r"\d+", solar_panel)[0]
 
-                    sample[solar_panel_num] = data[solar_panel]
+                    sample["solar_panel_" + solar_panel_num] = data[solar_panel]
         
             result.append(sample)
     
@@ -112,6 +113,16 @@ def create_xlsx(e_generator_dir, e_demand_dirs):
 
     return xlsx_data
 
+def time_idx(dates):
+    earliest_time = dates.min()
+    result = []
+    
+    for date in dates:
+        half_hours = (date - earliest_time).seconds / 60 / 30 + (date - earliest_time).days * 24
+        result.append(int(half_hours))
+
+    return pd.Series(result)
+
 def clean_dataset(args):
     path = args.data_dir
     station = path.split("/")[-1]
@@ -123,8 +134,15 @@ def clean_dataset(args):
     xlsx_data = create_xlsx(e_generator_dir, e_demand_dirs)
 
     station_data = pd.merge(xlsx_data, csv_data, how = "outer", on = ["date", "time"])
+
     station_data[["year", "month", "day"]] = station_data.date.str.split("-", expand = True)
+    
+    station_data = station_data.drop(columns=["day"])
+
     station_data["date"] = pd.to_datetime(station_data["date"])
+
+    station_data["half_hours_from_start"] = time_idx(station_data["date"])
+
     station_data["weekday"] = station_data["date"].dt.dayofweek
 
     return station_data
