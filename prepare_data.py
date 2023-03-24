@@ -19,7 +19,7 @@ class SolarProcess():
             else:
                 result = row
             return result
-        columns = ["power_usage", "power_surplus"]
+        columns = ["power_demand", "power_surplus"]
         for col in columns:
             dataset[col] = dataset[col].apply(lambda row: outlier(row))
         
@@ -67,7 +67,8 @@ def prepare_dataset(args):
     Process= SolarProcess(args)
 
     prepared_data = Process.parse(dataset)
-    
+    prepared_data = prepared_data.sort_values(by = "date")
     prepared_data.to_csv(args.data_output_dir)
+    #prepared_data.to_excel("temp.xlsx")
 
     

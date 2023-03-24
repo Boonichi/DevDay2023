@@ -16,19 +16,14 @@ def save_xls(dict_df, path):
             dict_df[key].to_excel(writer, key)
         writer.save()
 
-def init_dir(path, station):
-    cloud_dir = path / "cloud_{}0000{}.csv".format(station[0], station[1])
-    sunny_dir = path / "solar_{}0000{}.csv".format(station[0], station[1])
-    weather_dir = path /  "weather_forecast_{}0000{}.csv".format(station[0], station[1])
-    e_generator_dir = path /  "realne_report_solar_30_{}0000{}_{}_{}.xlsx".format(station[0], station[1], start_date[0], end_date[1])
-    e_demand_dir = list()
-    if station[0] == "v":
-        e_demand_dir.append(path / "realne_report_surplus30p_{}0000{}_{}_{}.xlsx".format(station[0], station[1], start_date[0], end_date[0]))
-        e_demand_dir.append(path / "realne_report_surplus30p_{}0000{}_{}_{}.xlsx".format(station[0], station[1], start_date[1], end_date[1]))
-    else:
-        e_demand_dir.append(path / "realne_report_surplus30p_{}0000{}_{}_{}.xlsx".format(station[0], station[1], start_date[0], end_date[1]))
+def init_dir(path):
+    cloud_dir = path.glob(f"cloud*.csv")
+    solar_dir = path.glob(f"solar*.csv")
+    weather_dir = path.glob(f"weather*.csv")
+    e_generator_dir = path.glob(f"*solar*.xlsx")
+    e_demand_dir = path.glob(f"*surplus*.xlsx")
     
-    return cloud_dir, sunny_dir, weather_dir, e_generator_dir, e_demand_dir
+    return cloud_dir, solar_dir, weather_dir, e_generator_dir, e_demand_dir
 
 def csv_process(dataset):
     result = list()
@@ -59,11 +54,16 @@ def csv_process(dataset):
         result.append(sample)
     return result
 
-def create_csv(cloud_dir, sunny_dir, weather_dir):
+def create_csv(cloud_dir, solar_dir, weather_dir):
+    # Reconstruct Path Glob
+    cloud_dir = list(cloud_dir)[0]
+    solar_dir = list(solar_dir)[0]
+    weather_dir = list(weather_dir)[0]
+
     cloud_data = pd.read_csv(cloud_dir)
-    sunny_data = pd.read_csv(sunny_dir)
+    solar_data = pd.read_csv(solar_dir)
     weather_data = pd.read_csv(weather_dir)
-    csv_data = pd.merge(weather_data, sunny_data, how = 'outer', on = ["target_date", "execution_date"])
+    csv_data = pd.merge(weather_data, solar_data, how = 'outer', on = ["target_date", "execution_date"])
     csv_data = pd.merge(csv_data, cloud_data, how = 'outer', on = ["target_date", "execution_date"])
     
     # CSV Process
@@ -72,6 +72,7 @@ def create_csv(cloud_dir, sunny_dir, weather_dir):
     return csv_data
 
 def xlsx_process(path):
+    path = list(path)[0]
     f = pd.ExcelFile(path)
     result = list()
     for sheet_name in f.sheet_names:
@@ -83,32 +84,33 @@ def xlsx_process(path):
         df_new = pd.read_excel("temp.xlsx", index_col = None)        
 
         for index, data in df_new.iterrows():
+            solar_state = 0
+
             sample = dict()
             sample["date"] = sheet_name + " " + data["時刻"] + ":00"
             sample["time"] = data["時刻"]
-            
             for solar_panel in data.index:
 
                 if (solar_panel == "30101:電力量（Wh）"):
-                    sample["power_usage"] = data[solar_panel]
+                    sample["power_demand"] = int(data[solar_panel])
                 elif (solar_panel == "30101:回生電力量（Wh）"):
-                    sample["power_surplus"] = data[solar_panel]
+                    sample["power_surplus"] = int(data[solar_panel])
                 elif (len(str(solar_panel)) > 2):
-                    solar_panel_num = re.findall(r"\d+", solar_panel)[0]
-
-                    sample["solar_panel_" + solar_panel_num] = data[solar_panel]
+                    if solar_state == 0:
+                        solar_state = 1
+                        sample["power_generation"] = int(data[solar_panel])
+                    else:
+                        sample["power_generation"]+=data[solar_panel]
         
             result.append(sample)
     
     return result
 
-def create_xlsx(e_generator_dir, e_demand_dirs):
+def create_xlsx(e_generator_dir, e_demand_dir):
     e_generator_data = pd.DataFrame(xlsx_process(e_generator_dir))
 
-    e_demand_data = pd.DataFrame()
-    for e_demand_dir in e_demand_dirs:
-        e_demand_data = pd.concat([e_demand_data, pd.DataFrame(xlsx_process(e_demand_dir))])
-        
+    e_demand_data = pd.DataFrame(xlsx_process(e_demand_dir))
+    
     xlsx_data = pd.merge(e_generator_data, e_demand_data, how = "outer", on = ["date", "time"])
 
     return xlsx_data
@@ -125,20 +127,23 @@ def time_idx(dates):
 
 def clean_dataset(args):
     path = args.data_dir
-    station = path.split("/")[-1]
 
     path = Path(path)
-    cloud_dir, sunny_dir, weather_dir, e_generator_dir, e_demand_dirs = init_dir(path, station)
 
-    csv_data = create_csv(cloud_dir, sunny_dir, weather_dir)
+    # Read directory of input files
+    cloud_dir, solar_dir, weather_dir, e_generator_dir, e_demand_dirs = init_dir(path)
+
+    # Generate csv/xlsx after preprocessing
+    csv_data = create_csv(cloud_dir, solar_dir, weather_dir)
     xlsx_data = create_xlsx(e_generator_dir, e_demand_dirs)
 
+    #Combine all files into only one DataFrame
     station_data = pd.merge(xlsx_data, csv_data, how = "outer", on = ["date", "time"])
 
     station_data[["year", "month", "day"]] = station_data.date.str.split("-", expand = True)
     
-    station_data = station_data.drop(columns=["day"])
-
+    station_data["day"] = station_data["day"].apply(lambda x: int(x[:2]))
+    
     station_data["date"] = pd.to_datetime(station_data["date"])
 
     station_data["half_hours_from_start"] = time_idx(station_data["date"])
