@@ -7,8 +7,6 @@ from pandas import Timestamp
 
 raw_weather_type = ['薄曇','晴れ','くもり','少雨','弱い雨','強い雨','激しい雨','猛烈な雨','みぞれ(弱い)','雪 (強い)','雪 (弱い)','みぞれ(強い)']
 weather_type = ['light cloud', 'sunny', 'cloudy', 'light rain', 'light rain', 'strong rain', 'heavy rain', 'heavy rain', 'sleet (weak)', 'snow (heavy)' ,'snow (weak)','sleet (strong)']
-start_date = ["20220301","20230101"]
-end_date = ["20221231","20230228"]
 
 def save_xls(dict_df, path):
         writer = pd.ExcelWriter(path)
@@ -131,11 +129,11 @@ def clean_dataset(args):
     path = Path(path)
 
     # Read directory of input files
-    cloud_dir, solar_dir, weather_dir, e_generator_dir, e_demand_dirs = init_dir(path)
+    cloud_dir, solar_dir, weather_dir, e_generator_dir, e_demand_dir = init_dir(path)
 
     # Generate csv/xlsx after preprocessing
     csv_data = create_csv(cloud_dir, solar_dir, weather_dir)
-    xlsx_data = create_xlsx(e_generator_dir, e_demand_dirs)
+    xlsx_data = create_xlsx(e_generator_dir, e_demand_dir)
 
     #Combine all files into only one DataFrame
     station_data = pd.merge(xlsx_data, csv_data, how = "outer", on = ["date", "time"])
@@ -149,7 +147,9 @@ def clean_dataset(args):
     station_data["half_hours_from_start"] = time_idx(station_data["date"])
 
     station_data["weekday"] = station_data["date"].dt.dayofweek
-
+    
+    station_data["group"] = str(0)
+    
     return station_data
         
 

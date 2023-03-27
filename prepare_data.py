@@ -19,7 +19,7 @@ class SolarProcess():
             else:
                 result = row
             return result
-        columns = ["power_demand", "power_surplus"]
+        columns = ["power_demand", "power_surplus", "power_generation"]
         for col in columns:
             dataset[col] = dataset[col].apply(lambda row: outlier(row))
         
@@ -37,38 +37,33 @@ class SolarProcess():
         impute_method = impute_identify(self.args.imputation)
         return dataset
 
-    def impute_na(self,dataset):
-        if self.args.impute_na == "remove":
+    def fill_na(self,dataset):
+        if self.args.fill_na == "remove":
             return dataset.dropna().reset_index(drop = True)
-        elif self.args.impute_na == "fill_zero":
+        elif self.args.fill_na == "fill_zero":
             return dataset.fillna(value = 0)
 
-    def normalize_data(self,dataset):
-        
-        return dataset
+    #    return dataset
     def parse(self,dataset):
-        funcs = [
+        funcs = {
             self.remove_outlier,
-            self.impute_na,
+            self.fill_na,
             self.impute_missing_data,
-            self.normalize_data,
-        ]
-
+        }
+        
         for fun in funcs:
             dataset = fun(dataset)
-
+        
         return dataset
-
 
 @fcall
 def prepare_dataset(args):
     dataset = clean_dataset(args)
-
     Process= SolarProcess(args)
 
     prepared_data = Process.parse(dataset)
     prepared_data = prepared_data.sort_values(by = "date")
+
     prepared_data.to_csv(args.data_output_dir)
-    #prepared_data.to_excel("temp.xlsx")
 
     
