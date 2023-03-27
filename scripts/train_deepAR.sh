@@ -1,0 +1,1 @@
+python main.py --device cpu --model DeepAR --batch_size 64 --hidden_size 168 --num_workers 2 --epochs 40

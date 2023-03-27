@@ -1,1 +1,1 @@
-python main.py --prepare_data --data_dir 2023_devday_data/v1 --data_output_dir dataset/clean/v1.csv --impute_na fill_zero
+python main.py --prepare_data 
