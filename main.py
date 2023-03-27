@@ -40,9 +40,12 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
     
+    # Prepare Data by cleaning and preprocessing
     if args.prepare_data:
         prepare_dataset(args)
         return
+    
+    # Predict
     if args.test:
         path = args.cpkt_dir +  "/" + args.model + "/lightning_logs/"
         newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoint"
@@ -63,7 +66,7 @@ def main(args):
     # Callbacks
     early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 1e-7, patience=5, verbose = True, mode = "min")
     lr_logger = LearningRateMonitor()
-    logger = TensorBoardLogger("model_logs/" + args.model)
+    logger = TensorBoardLogger("model_logs/{}_{}".format(args.station, args.model))
     
     # Trainer
     trainer = pl.Trainer(

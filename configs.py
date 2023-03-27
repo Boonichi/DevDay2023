@@ -55,11 +55,13 @@ def get_args_parser():
     
 
     # Dataset parameters
+    parser.add_argument("--station", default = "v1", type = str, 
+                        help = "Choose station (v1,v2,y6,y7) as target")
     parser.add_argument('--prepare_data', action="store_true", 
                         help = "Prepare data")
-    parser.add_argument('--data_dir', default='./data/2023_devday_data/v1/', type=str,
+    parser.add_argument('--data_dir', default='./data/2023_devday_data/', type=str,
                         help='dataset path')
-    parser.add_argument('--data_output_dir', default='./dataset/v1.csv', type =str,
+    parser.add_argument('--data_output_dir', default='./dataset/', type =str,
                         help="Dataset output path")
     parser.add_argument('--eval_data_path', default=None, type=str,
                         help='dataset path for evaluation')

@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime as dt
 from pandas import Timestamp
+import math
 
 raw_weather_type = ['薄曇','晴れ','くもり','少雨','弱い雨','強い雨','激しい雨','猛烈な雨','みぞれ(弱い)','雪 (強い)','雪 (弱い)','みぞれ(強い)']
 weather_type = ['light cloud', 'sunny', 'cloudy', 'light rain', 'light rain', 'strong rain', 'heavy rain', 'heavy rain', 'sleet (weak)', 'snow (heavy)' ,'snow (weak)','sleet (strong)']
@@ -90,13 +91,16 @@ def xlsx_process(path):
             for solar_panel in data.index:
 
                 if (solar_panel == "30101:電力量（Wh）"):
-                    sample["power_demand"] = int(data[solar_panel])
+                    sample["power_demand"] = data[solar_panel]
                 elif (solar_panel == "30101:回生電力量（Wh）"):
-                    sample["power_surplus"] = int(data[solar_panel])
+                    sample["power_surplus"] = data[solar_panel]
                 elif (len(str(solar_panel)) > 2):
                     if solar_state == 0:
                         solar_state = 1
-                        sample["power_generation"] = int(data[solar_panel])
+                        if (math.isnan(data[solar_panel])): 
+                            break
+                        else:
+                            sample["power_generation"] = int(data[solar_panel])
                     else:
                         sample["power_generation"]+=data[solar_panel]
         
@@ -124,7 +128,7 @@ def time_idx(dates):
     return pd.Series(result)
 
 def clean_dataset(args):
-    path = args.data_dir
+    path = args.data_dir + "/" + args.station
 
     path = Path(path)
 

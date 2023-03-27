@@ -1,1 +1,1 @@
-python main.py --device cpu --model TFT --batch_size 64 --hidden_size 168 --num_workers 2 --epochs 40
+python main.py --device cpu --model TFT --batch_size 64 --hidden_size 168 --hidden_continuous_size 168 --num_workers 2 --epochs 40

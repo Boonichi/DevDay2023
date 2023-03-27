@@ -46,7 +46,7 @@ class SolarProcess():
     #    return dataset
     def parse(self,dataset):
         funcs = {
-            self.remove_outlier,
+            #self.remove_outlier,
             self.fill_na,
             self.impute_missing_data,
         }
@@ -60,10 +60,9 @@ class SolarProcess():
 def prepare_dataset(args):
     dataset = clean_dataset(args)
     Process= SolarProcess(args)
-
     prepared_data = Process.parse(dataset)
     prepared_data = prepared_data.sort_values(by = "date")
 
-    prepared_data.to_csv(args.data_output_dir)
+    prepared_data.to_csv(args.data_output_dir + "/{}.csv".format(args.station))
 
     
