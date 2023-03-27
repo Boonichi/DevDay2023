@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 import time
 import datetime
+import os
+import pickle
 
 from numba.core.errors import NumbaWarning
 import warnings
@@ -10,11 +12,14 @@ import warnings
 import torch
 import numpy as np
 
+from configs import get_args_parser
 from prepare_data import prepare_dataset
 from dataset import create_dataloader
-from model import create_model, opt_identify
+from model import SolarModel
+from postprocess import postprocess
 
-from pytorch_forecasting.models import temporal_fusion_transformer
+
+from pytorch_forecasting.models.temporal_fusion_transformer.tuning import optimize_hyperparameters
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
@@ -24,93 +29,6 @@ import tensorflow as tf
 import tensorboard as tb
 tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
 
-
-
-
-def str2bool(v):
-    """
-    Converts string to bool type; enables command line 
-    arguments in the format of '--arg1 true --arg2 false'
-    """
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-    
-def get_args_parser():
-    parser = argparse.ArgumentParser('Solar Model for forecasting task', add_help=False)
-    
-    # Train parameters
-    parser.add_argument('--batch_size', default=32, type=int,
-                        help='Per GPU batch size')
-    parser.add_argument('--num_workers', default = 8, type=int,
-                        help="Number of worker in DataLoader")
-    parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--update_freq', default=1, type=int,
-                        help='gradient accumulation steps')
-    parser.add_argument('--verbose', action = "store_true",
-                        help = "Display prediction from model")
-
-    # Finetune paramaters:
-    parser.add_argument('--finetune', action = "store_true",
-                        help = "Finetuning model with exist checkpoint")
-    parser.add_argument('--model_prefix', default = "", type = str)
-
-    # Predict parameters
-    parser.add_argument('--test', action = "store_true",
-                        help = "Test Process")
-    # Model parameters
-    parser.add_argument('--model', default='TFT', type=str, metavar='MODEL',
-                        help='Name of model to train')
-    parser.add_argument('--config', default = None,
-                        help = "Add config file that include model params")
-    parser.add_argument('--drop_path', type=float, default=0, metavar='PCT',
-                        help='Drop path rate (default: 0.0)')
-    parser.add_argument('--input_size', default=224, type=int,
-                        help='Input size of Solar Forecasting Model')
-    parser.add_argument('--clip_grad', type = float, default = None, metavar="NORM",
-                        help='Clip gradient norm (default: None, no clipping)')
-    parser.add_argument('--hidden_size', type = int, default = 16,
-                        help = "Size of hidden layer of model")
-    parser.add_argument('--attention_head', type = int, default = 4,
-                        help = "Number of attention head in Transformer Architecture")
-    
-    # Optimization parameters
-    parser.add_argument("--opt", default = "adam", type = str, metavar = 'OPTIMIZER',
-                        help = "Optimizer function (adam, lion)")
-    parser.add_argument("--lr", default = 1.e-3, type = int,
-                        help = "learning rate of optimizer")
-    
-
-    # Dataset parameters
-    parser.add_argument('--prepare_data', action="store_true", 
-                        help = "Prepare data")
-    parser.add_argument('--data_dir', default='/data/2023_devday_data/v1', type=str,
-                        help='dataset path')
-    parser.add_argument('--data_output_dir', default='dataset/v1.csv', type =str,
-                        help="Dataset output path")
-    parser.add_argument('--eval_data_path', default=None, type=str,
-                        help='dataset path for evaluation')
-    parser.add_argument('--output_dir', default='',
-                        help='path where to save, empty for no saving')
-    parser.add_argument('--device', default='mps',
-                        help='device to use for training / testing')
-    parser.add_argument('--seed', default=0, type=int)
-    parser.add_argument('--name', default='', type=str)
-    parser.add_argument('--max_encoder_len', default = 7 * 48, type = int)
-    parser.add_argument('--max_pred_day', default = 2, type = int)
-    
-    # Prepare process params
-    parser.add_argument("--imputation", default = "mean_most_impute", type = str,
-                        help ="Identify imputation techniques")
-    parser.add_argument("--impute_na", default = "remove", type = str,
-                        help="Remove all row that include NaN value")
-
-    return parser
 
 def main(args):
     print(args)
@@ -126,14 +44,26 @@ def main(args):
         prepare_dataset(args)
         return
     if args.test:
+        path = args.cpkt_dir +  "/" + args.model + "/lightning_logs/"
+        newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoint"
+        checkpoint = os.listdir(newest_version)[0]
+
+        model = model.load_from_checkpoint(checkpoint)
+        preds = model.predict(val_dataloader)
+        preds = postprocess(preds)
+        with open("result.csv","w") as f:
+            f.write(str(preds))
+            f.close()
+
         return
     
+    # Create DataLoader
     training, val, train_dataloader, val_dataloader = create_dataloader(args)
 
     # Callbacks
     early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 1e-7, patience=5, verbose = True, mode = "min")
     lr_logger = LearningRateMonitor()
-    logger = TensorBoardLogger("lightning_logs")
+    logger = TensorBoardLogger("model_logs/" + args.model)
     
     # Trainer
     trainer = pl.Trainer(
@@ -144,19 +74,60 @@ def main(args):
         callbacks=[early_stop_callback, lr_logger],
         logger = logger
     )
-    # Optimizer
-    #optimizer = opt_identify(args.opt)
-    model = create_model(args, training)
+
+    # Create Model
+    model = SolarModel(args).create(training)
+    model.to(device)
+
+    # Hyperparameter Tuning
+    if args.param_optimize:
+        '''if args.model == "TFT":
+            # create a new study
+            study = optimize_hyperparameters(
+                train_dataloader,
+                val_dataloader,
+                model_path="optuna_test",
+                n_trials=1,
+                max_epochs=1,
+                gradient_clip_val_range=(0.01, 1.0),
+                hidden_size_range=(30, 128),
+                hidden_continuous_size_range=(30, 128),
+                attention_head_size_range=(1, 4),
+                learning_rate_range=(0.001, 0.1),
+                dropout_range=(0.1, 0.3),
+                reduce_on_plateau_patience=4,
+                use_learning_rate_finder=False 
+            )
+            # save study results
+            with open("test_study.pkl", "wb") as fout:
+                pickle.dump(study, fout)
+
+            # print best hyperparameters
+            print(study.best_trial.params)'''
+        # find optimal learning rate
+        res = trainer.tuner.lr_find(
+            model,
+            train_dataloaders=train_dataloader,
+            val_dataloaders=val_dataloader,
+            min_lr=1e-5,
+            max_lr=1e0,
+            early_stop_threshold=100,
+        )
+        print(f"suggested learning rate: {res.suggestion()}")
+        fig = res.plot(show=True, suggest=True)
+        fig.show()
+        model.hparams.learning_rate = res.suggestion()
+
+        return
+    
     # FineTuning
     if args.finetune:
-        best_model_path = trainer.checkpoint_callback.best_model_path
-        print("Best Model Path",best_model_path)
-        best_tft = model.load_from_checkpoint("/Users/phanvanhung/devday2023/lightning_logs/lightning_logs/version_10/checkpoints/epoch=3-step=2108.ckpt")
-        preds = best_tft.predict(train_dataloader)
-        with open("result.txt", "w") as f:
-            f.write(str(preds))
-            f.close()
-        return
+        path = args.cpkt_dir +  "/" + args.model + "/lightning_logs/"
+        newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoint"
+        checkpoint = os.listdir(newest_version)[0]
+
+        model = model.load_from_checkpoint(checkpoint)
+
     # Train Process
     start_time = time.time()
     trainer.fit(
