@@ -79,8 +79,8 @@ def get_args_parser():
     parser.add_argument('--max_pred_day', default = 2, type = int)
     
     # Prepare process params
-    parser.add_argument("--fill_na", default = "remove", type = str,
-                        help="Remove all row that include NaN value")
+    parser.add_argument("--fill_na", default = "fill", type = str,
+                        help="Fill NaN value (fill/remove)")
     parser.add_argument("--normalize_data", default = True, type = bool,
                         help="Normalize dataset")
     parser.add_argument("--smooth", default = "Exponent", type = str,
@@ -89,5 +89,7 @@ def get_args_parser():
                         help = "Window size")
     parser.add_argument("--interval", default = "sigma", type = str,
                         help = "Prediction Interval after smoothing")
+    parser.add_argument("--impute", default = "MICE", type = str,
+                        help = "Imputation way to fill NaN value")
 
     return parser

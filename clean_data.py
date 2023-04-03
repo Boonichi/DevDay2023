@@ -112,9 +112,8 @@ def create_xlsx(e_generator_dir, e_demand_dir):
     e_generator_data = pd.DataFrame(xlsx_process(e_generator_dir))
 
     e_demand_data = pd.DataFrame(xlsx_process(e_demand_dir))
-    e_demand_data.to_excel("demand.xlsx")
+    
     xlsx_data = pd.merge(e_generator_data, e_demand_data, how = "outer", on = ["date", "time"])
-    xlsx_data.to_excel("test.xlsx")
     return xlsx_data
 
 def time_idx(dates):
@@ -122,7 +121,7 @@ def time_idx(dates):
     result = []
     
     for date in dates:
-        half_hours = (date - earliest_time).seconds / 60 / 30 + (date - earliest_time).days * 24
+        half_hours = (date - earliest_time).total_seconds() / 60 / 30 
         result.append(int(half_hours))
 
     return pd.Series(result)
@@ -153,6 +152,8 @@ def clean_dataset(args):
     station_data["weekday"] = station_data["date"].dt.dayofweek
     
     station_data["group"] = str(0)
+    
+    station_data.to_excel("test.xlsx")
     
     return station_data
         
