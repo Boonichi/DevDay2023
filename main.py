@@ -62,10 +62,11 @@ def main(args):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         accelerator=args.device,
-        #enable_model_summary= True,
+        enable_model_summary= True,
         gradient_clip_val= args.clip_grad,
         callbacks=[early_stop_callback, lr_logger],
-        logger = logger
+        logger = logger,
+        log_every_n_steps=10
     )
     
     # Create Model
@@ -79,9 +80,9 @@ def main(args):
             study = optimize_hyperparameters(
                 train_dataloader,
                 val_dataloader,
-                model_path="optuna_test",
+                model_path="Optuna",
                 n_trials=200,
-                max_epochs=50,
+                max_epochs=20,
                 gradient_clip_val_range=(0.01, 1.0),
                 hidden_size_range=(8, 128),
                 hidden_continuous_size_range=(8, 128),
@@ -89,8 +90,9 @@ def main(args):
                 learning_rate_range=(0.001, 0.1),
                 dropout_range=(0.1, 0.3),
                 trainer_kwargs=dict(limit_train_batches=30),
-                reduce_on_plateau_patience=4,
+                reduce_on_plateau_patience=args.patience,
                 use_learning_rate_finder=False,
+                log_dir = "model_logs"
             )
             # save study results
             with open(args.output_dir + "study.pkl", "wb") as fout:
@@ -116,7 +118,9 @@ def main(args):
             model = model.load_from_checkpoint(checkpoint)
             preds, x = model.predict(val_dataloader, mode = "raw", return_x = True)
 
-            print(preds._fields)
+            interpretation = model.interpret_output(preds, reduction = "sum")
+            model.plot_interpretation(interpretation)
+
             with open(args.output_dir + "preds.pickle","wb") as f:
                 pickle.dump(preds["prediction"],f)
             f.close()
@@ -125,6 +129,7 @@ def main(args):
         with open(args.output_dir + "val.pickle","wb") as f:
             pickle.dump(val,f)
             f.close()
+
 
         #preds = postprocess(preds)
 

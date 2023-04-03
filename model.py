@@ -14,6 +14,7 @@ class SolarModel():
         self.patience = args.patience
         self.opt = args.opt
         self.dropout = args.dropout
+        self.log_interval = 10
         self.loss_identify()
 
     def loss_identify(self):
@@ -59,7 +60,7 @@ class SolarModel():
             output_size = self.output_size,
             loss = self.loss,
             dropout = self.dropout,
-            log_interval = 10,
+            log_interval = self.log_interval,
             reduce_on_plateau_patience=self.patience,
         )
     def baseline_model(self, training):
