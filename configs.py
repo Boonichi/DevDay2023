@@ -59,31 +59,35 @@ def get_args_parser():
                         help = "Choose station (v1,v2,y6,y7) as target")
     parser.add_argument('--prepare_data', action="store_true", 
                         help = "Prepare data")
+    parser.add_argument('--target', default = "power_generation", type = str,
+                        help = "Choose target feature (power_generation / power_demand)")
+    parser.add_argument('--target_mode', default = "single", type = str,
+                        help = "Multiple target or single target (power_generation/power_demand)")
     parser.add_argument('--data_dir', default='./data/2023_devday_data/', type=str,
                         help='dataset path')
     parser.add_argument('--data_output_dir', default='./dataset/', type =str,
                         help="Dataset output path")
     parser.add_argument('--eval_data_path', default=None, type=str,
                         help='dataset path for evaluation')
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output_dir', default='./',
                         help='path where to save, empty for no saving')
     parser.add_argument('--device', default='mps',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--name', default='', type=str)
     parser.add_argument('--max_encoder_day', default = 7, type = int)
-    parser.add_argument('--max_pred_day', default = 30, type = int)
+    parser.add_argument('--max_pred_day', default = 2, type = int)
     
     # Prepare process params
-    parser.add_argument("--imputation", default = "mean_most_impute", type = str,
-                        help ="Identify imputation techniques")
     parser.add_argument("--fill_na", default = "remove", type = str,
                         help="Remove all row that include NaN value")
-    parser.add_argument("--remove_outlier", default = True, type = bool,
-                        help="Remove outlier in dataset")
     parser.add_argument("--normalize_data", default = True, type = bool,
                         help="Normalize dataset")
-    parser.add_argument("--remove_target_zero", default = False, type = bool,
-                        help = "Remove all zero values in target feature")
+    parser.add_argument("--smooth", default = "Exponent", type = str,
+                        help="Smoothing techniques (Exponent, Convolution,...)" )
+    parser.add_argument("--window_size", default = 48, type = int,
+                        help = "Window size")
+    parser.add_argument("--interval", default = "sigma", type = str,
+                        help = "Prediction Interval after smoothing")
 
     return parser
