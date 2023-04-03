@@ -11,15 +11,15 @@ import warnings
 
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 
 from configs import get_args_parser
 from prepare_data import prepare_dataset
 from dataset import create_dataloader
 from model import SolarModel
-from postprocess import postprocess
+#from postprocess import postprocess
 
 
-from pytorch_forecasting.models.temporal_fusion_transformer.tuning import optimize_hyperparameters
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
@@ -28,6 +28,8 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import tensorflow as tf
 import tensorboard as tb
 tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
+
+from pytorch_forecasting.models.temporal_fusion_transformer.tuning import optimize_hyperparameters
 
 
 def main(args):
@@ -39,94 +41,101 @@ def main(args):
     seed = args.seed 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    
+        
     # Prepare Data by cleaning and preprocessing
     if args.prepare_data:
         prepare_dataset(args)
-        return
-    
-    # Predict
-    if args.test:
-        path = args.cpkt_dir +  "/" + args.model + "/lightning_logs/"
-        newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoint"
-        checkpoint = os.listdir(newest_version)[0]
-
-        model = model.load_from_checkpoint(checkpoint)
-        preds = model.predict(val_dataloader)
-        preds = postprocess(preds)
-        with open("result.csv","w") as f:
-            f.write(str(preds))
-            f.close()
-
         return
     
     # Create DataLoader
     training, val, train_dataloader, val_dataloader = create_dataloader(args)
 
     # Callbacks
-    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 1e-7, patience=5, verbose = True, mode = "min")
+    early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 1e-7, patience=args.patience, verbose = True, mode = "min")
     lr_logger = LearningRateMonitor()
-    logger = TensorBoardLogger("model_logs/{}_{}".format(args.station, args.model))
+    if args.target_mode == "multiple":
+        logger = TensorBoardLogger(args.output_dir + "model_logs/{}_{}".format(args.station, args.model))
+    else:
+        logger = TensorBoardLogger(args.output_dir + "model_logs/{}_{}_{}".format(args.station, args.model, args.target))
     
     # Trainer
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         accelerator=args.device,
-        enable_model_summary= True,
+        #enable_model_summary= True,
         gradient_clip_val= args.clip_grad,
         callbacks=[early_stop_callback, lr_logger],
         logger = logger
     )
-
+    
     # Create Model
     model = SolarModel(args).create(training)
     model.to(device)
 
     # Hyperparameter Tuning
     if args.param_optimize:
-        '''if args.model == "TFT":
+        if args.model == "TFT":
             # create a new study
             study = optimize_hyperparameters(
                 train_dataloader,
                 val_dataloader,
                 model_path="optuna_test",
-                n_trials=1,
-                max_epochs=1,
+                n_trials=200,
+                max_epochs=50,
                 gradient_clip_val_range=(0.01, 1.0),
-                hidden_size_range=(30, 128),
-                hidden_continuous_size_range=(30, 128),
+                hidden_size_range=(8, 128),
+                hidden_continuous_size_range=(8, 128),
                 attention_head_size_range=(1, 4),
                 learning_rate_range=(0.001, 0.1),
                 dropout_range=(0.1, 0.3),
+                trainer_kwargs=dict(limit_train_batches=30),
                 reduce_on_plateau_patience=4,
-                use_learning_rate_finder=False 
+                use_learning_rate_finder=False,
             )
             # save study results
-            with open("test_study.pkl", "wb") as fout:
+            with open(args.output_dir + "study.pkl", "wb") as fout:
                 pickle.dump(study, fout)
 
             # print best hyperparameters
-            print(study.best_trial.params)'''
-        # find optimal learning rate
-        res = trainer.tuner.lr_find(
-            model,
-            train_dataloaders=train_dataloader,
-            val_dataloaders=val_dataloader,
-            min_lr=1e-5,
-            max_lr=1e0,
-            early_stop_threshold=100,
-        )
-        print(f"suggested learning rate: {res.suggestion()}")
-        fig = res.plot(show=True, suggest=True)
-        fig.show()
-        model.hparams.learning_rate = res.suggestion()
+            print(study.best_trial.params)
 
         return
+    # Predict
+    if args.test:
+        if args.model == "base":
+            preds = model.predict(val_dataloader)
+
+        else:
+            if args.target_mode == "multiple":
+                path = args.output_dir + "model_logs/{}_{}".format(args.station, args.model) + "/lightning_logs/"
+            else:
+                path = args.output_dir + "model_logs/{}_{}_{}".format(args.station, args.model, args.target) + "/lightning_logs/"
+            newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoints/"
+            checkpoint = newest_version + os.listdir(newest_version)[0]
+
+            model = model.load_from_checkpoint(checkpoint)
+            preds, x = model.predict(val_dataloader, mode = "raw", return_x = True)
+
+            print(preds._fields)
+            with open(args.output_dir + "preds.pickle","wb") as f:
+                pickle.dump(preds["prediction"],f)
+            f.close()
     
+
+        with open(args.output_dir + "val.pickle","wb") as f:
+            pickle.dump(val,f)
+            f.close()
+
+        #preds = postprocess(preds)
+
+        return
     # FineTuning
     if args.finetune:
-        path = args.cpkt_dir +  "/" + args.model + "/lightning_logs/"
-        newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoint"
+        if args.target_mode == "multiple":
+            path = args.output_dir + "model_logs/{}_{}".format(args.station, args.model) + "/lightning_logs/"
+        else:
+            path = args.output_dir + "model_logs/{}_{}_{}".format(args.station, args.model, args.target) + "/lightning_logs/"
+        newest_version = max([os.path.join(path,d) for d in os.listdir(path)], key=os.path.getmtime) + "/checkpoints"
         checkpoint = os.listdir(newest_version)[0]
 
         model = model.load_from_checkpoint(checkpoint)

@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 def create_dataloader(args):
     
     # Read Dataset
-    data = pd.read_csv(args.data_output_dir, index_col = 0)
+    data = pd.read_csv(args.data_output_dir + "/{}.csv".format(args.station), index_col = 0)
     
     # Time interval in validation set
     max_prediction_length = args.max_pred_day * 48
@@ -20,39 +20,42 @@ def create_dataloader(args):
     # Time Interval in train set
     training_cutoff = data["half_hours_from_start"].max() - max_prediction_length
 
-    # Intialize features and params for DataLoader
-    #target = solar_panels + ["power_usage","power_surplus"]
-    target = ["power_generation", "power_demand"]
+    # Intialize features and params for DataLoader based on target mode
     time_idx = "half_hours_from_start"
     group_ids = ["group"]
+    if args.target_mode == "multiple":
+        target = ["power_generation", "power_demand"]
+        norms = MultiNormalizer([
+                                    GroupNormalizer(groups=group_ids, transformation="softplus"),
+                                    GroupNormalizer(groups=group_ids, transformation="softplus")
+                                ])
+    else:
+        target = args.target
+        norms = GroupNormalizer(groups=group_ids, transformation="softplus")
+        
+    
         
     # Train TimeSeriesDataset
     training = TimeSeriesDataSet(data = data[lambda x: x["half_hours_from_start"] <= training_cutoff], 
                                 time_idx = time_idx, 
                                 target = target, 
                                 group_ids = group_ids,
-                                min_encoder_length=max_encoder_len//2,
+                                min_encoder_length=1,
                                 max_encoder_length=max_encoder_len,
                                 min_prediction_length=1,
                                 max_prediction_length=max_prediction_length,
                                 time_varying_known_reals=["month", "weekday", "day"],
                                 time_varying_known_categoricals=["time"],
-                                time_varying_unknown_reals=["solar", "cloud", "telop_code"],
-                                target_normalizer=  MultiNormalizer([
-                                    GroupNormalizer(),
-                                    GroupNormalizer()
-                                ]),
+                                time_varying_unknown_reals=["solar", "cloud", 'telop_code', 'power_surplus'],
+                                target_normalizer= norms,
                                 add_relative_time_idx=True,
                                 add_target_scales=True,
                                 add_encoder_length=True,
                                 allow_missing_timesteps=True,
-                                #categorical_encoders={
-                                #    "telop_code" : NaNLabelEncoder(add_nan=True)
-                                #},
-                                #scalers={
-                                #    "solar" : StandardScaler(),
-                                #    "cloud" : StandardScaler()
-                                #}
+                                scalers={
+                                    "solar" : StandardScaler(),
+                                    "cloud" : StandardScaler(),
+                                }
                                 )
     
     # Val TimeSeriesDataset

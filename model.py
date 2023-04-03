@@ -2,7 +2,7 @@
 import pytorch_lightning as pl
 
 from pytorch_forecasting.models import Baseline, TemporalFusionTransformer, AutoRegressiveBaseModel, DeepAR, RecurrentNetwork
-from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, RMSE, MAE, MAPE, MultivariateNormalDistributionLoss
+from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, RMSE, MAE, MAPE
 
 class SolarModel():
     def __init__(self, args):
@@ -11,37 +11,66 @@ class SolarModel():
         self.hidden_size = args.hidden_size
         self.hidden_continuous_size = args.hidden_continuous_size
         self.attention_head = args.attention_head
-        if args.loss == "QuantileLoss":
-            self.loss = [QuantileLoss(quantiles = [0.25, 0.5, 0.75]), QuantileLoss(quantiles=[0.25, 0.5,0.75])]
-            self.loss = MultiLoss(self.loss)
-        elif args.loss == "MAE":
-            self.loss = MultiLoss(MAE)
-        self.log_interval = args.log_interval
         self.patience = args.patience
         self.opt = args.opt
         self.dropout = args.dropout
+        self.loss_identify()
 
+    def loss_identify(self):
+
+        args = self.args
+        if args.target_mode == "multiple":
+            if args.loss == "QuantileLoss":
+                self.loss = [QuantileLoss(quantiles = [0.25, 0.5, 0.75]), QuantileLoss(quantiles=[0.25, 0.5,0.75])]
+                self.loss = MultiLoss(self.loss)
+                self.output_size = [3,3]
+
+            elif args.loss == "MAE":
+                self.loss = [QuantileLoss(quantiles = [ 0.5]), QuantileLoss(quantiles=[0.5])]
+                self.loss = MultiLoss(self.loss)
+                self.output_size = [1,1]
+
+            elif args.loss == "RMSE":
+                self.loss = MultiLoss(RMSE(), RMSE())
+                self.output_size = [1,1]
+        else:
+            if args.loss == "QuantileLoss":
+                self.loss = QuantileLoss(quantiles = [0.25, 0.5, 0.75])
+                self.output_size = 3
+
+            elif args.loss == "MAE":
+                self.loss = QuantileLoss(quantiles = [0.5])
+                self.output_size = 1
+
+            elif args.loss == "RMSE":
+                self.loss = RMSE()
+                self.output_size = 1
+                
+        return self
+    
     def TFT_model(self, training):
         return TemporalFusionTransformer.from_dataset(
             training,
             learning_rate = self.lr,
             hidden_size = self.hidden_size,
+            lstm_layers = 2,
             attention_head_size= self.attention_head,
             hidden_continuous_size= self.hidden_continuous_size,
-            output_size = [3,3],
+            output_size = self.output_size,
             loss = self.loss,
             dropout = self.dropout,
-            log_interval = self.log_interval,
+            log_interval = 10,
             reduce_on_plateau_patience=self.patience,
         )
     def baseline_model(self, training):
-        return Baseline()
+        return Baseline(
+        )
     
     def ARIMA_model(self, training):
         return AutoRegressiveBaseModel(
             training,
             learning_rate= self.lr,
-            loss = MAE(),
+            loss = self.loss,
             reduce_on_plateau_patience=self.patience,
             log_interval = self.log_interval,
             optimizer = self.opt
@@ -54,9 +83,6 @@ class SolarModel():
             learning_rate = self.lr,
             hidden_size= self.hidden_size,
             dropout=self.dropout,
-            loss= MultiLoss(
-                [MultivariateNormalDistributionLoss(rank=30), MultivariateNormalDistributionLoss(rank = 30)]
-            )
         )
     
     def RNN_model(self, training):
