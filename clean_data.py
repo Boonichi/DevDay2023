@@ -112,9 +112,9 @@ def create_xlsx(e_generator_dir, e_demand_dir):
     e_generator_data = pd.DataFrame(xlsx_process(e_generator_dir))
 
     e_demand_data = pd.DataFrame(xlsx_process(e_demand_dir))
-    
+    e_demand_data.to_excel("demand.xlsx")
     xlsx_data = pd.merge(e_generator_data, e_demand_data, how = "outer", on = ["date", "time"])
-
+    xlsx_data.to_excel("test.xlsx")
     return xlsx_data
 
 def time_idx(dates):
@@ -128,7 +128,7 @@ def time_idx(dates):
     return pd.Series(result)
 
 def clean_dataset(args):
-    path = args.data_dir + "/" + args.station
+    path = args.data_dir + "/" + args.station + "/eval_input/"
 
     path = Path(path)
 

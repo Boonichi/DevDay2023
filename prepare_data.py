@@ -2,54 +2,75 @@ import os
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from imputation import mean_most_impute, VAE_impute, IDW_impute
 
 from clean_data import clean_dataset
 
 from utils import fcall
 
+from tsmoothie import smoother as sm
+from tsmoothie import bootstrap as bs
+
 class SolarProcess():
     def __init__(self, args):
         self.args = args
 
-    def remove_outlier(self,dataset):
-        def outlier(row):
-            if row > 200000 or row < 0:
-                result = 0
-            else:
-                result = row
-            return result
-        columns = ["power_demand", "power_surplus", "power_generation"]
-        for col in columns:
-            dataset[col] = dataset[col].apply(lambda row: outlier(row))
-        
-        return dataset
+    def remove_error(self,dataset):
+        features = ["power_demand", "power_surplus", "power_generation"]
+        max_value = 500000
+        min_value = 0
 
-    def impute_missing_data(self,dataset):
-        def impute_identify(imputation):
-            funcs = {
-                "mean_most_impute" : mean_most_impute,
-                "VAE_impute" : VAE_impute,
-                "IDW_impute" : IDW_impute
-            }
-            return funcs[imputation]
+        result = []
+
+        for index, row in dataset.iterrows():
+            check = True
+            for fea in features:
+                if row[fea] > max_value or row[fea] < min_value:
+                    check = False
+            if check == True:
+                result.append(row)
         
-        impute_method = impute_identify(self.args.imputation)
-        return dataset
+        return pd.DataFrame(result, columns = list(dataset.columns))
 
     def fill_na(self,dataset):
         if self.args.fill_na == "remove":
-            return dataset.dropna().reset_index(drop = True)
+            dataset = dataset.dropna().reset_index(drop = True)
         elif self.args.fill_na == "fill_zero":
-            return dataset.fillna(value = 0)
+            dataset = dataset.fillna(value = 0)    
 
-    #    return dataset
+        return dataset
+    def smooth(self, dataset):
+        features = ["power_generation", "power_demand"]
+        if self.args.smooth == "Exponent":
+            smoother = sm.ExponentialSmoother(window_len= self.args.window_size, alpha = 0.3)
+        
+        fea_data = []
+        for fea in features:
+            sample = dataset[fea].tolist()
+            
+            fea_data.append(sample)
+        
+        smoother.smooth(fea_data)
+        low_interval, up_interval = smoother.get_intervals(self.args.interval + "_interval")
+        
+        result = []
+        
+        for index_row, row in dataset.iterrows():
+            check = True
+            for index_series, fea in enumerate(features):
+                if index_row >= self.args.window_size:
+                    if row[fea] > up_interval[index_series][index_row - 48]:
+                        check = False
+            if check == True:
+                result.append(row)
+
+        return pd.DataFrame(result, columns = list(dataset.columns))
+
     def parse(self,dataset):
-        funcs = {
-            #self.remove_outlier,
+        funcs = [
+            self.remove_error,
             self.fill_na,
-            self.impute_missing_data,
-        }
+            self.smooth,
+        ]
         
         for fun in funcs:
             dataset = fun(dataset)
@@ -63,6 +84,6 @@ def prepare_dataset(args):
     prepared_data = Process.parse(dataset)
     prepared_data = prepared_data.sort_values(by = "date")
 
-    prepared_data.to_csv(args.data_output_dir + "/{}.csv".format(args.station))
+    prepared_data.reset_index().to_csv(args.data_output_dir + "/{}.csv".format(args.station))
 
     
