@@ -18,8 +18,6 @@ def get_args_parser():
     parser.add_argument('--cpkt_dir', default = "model_logs", type = str)
 
     # Predict parameters
-    parser.add_argument('--test', action = "store_true",
-                        help = "Test Process")
     parser.add_argument('--verbose', action = "store_true",
                         help = "Display prediction from model")
     # Model parameters
@@ -76,7 +74,7 @@ def get_args_parser():
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--name', default='', type=str)
     parser.add_argument('--max_encoder_day', default = 7, type = int)
-    parser.add_argument('--max_pred_day', default = 2, type = int)
+    parser.add_argument('--max_pred_day', default = 3, type = int)
     
     # Prepare process params
     parser.add_argument("--fill_na", default = "fill", type = str,

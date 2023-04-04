@@ -29,8 +29,6 @@ def csv_process(dataset):
     # Process execution date
     def target_date(sample):
         date, time = sample.split("T")
-        time = time.split(":")
-        time = time[0] + ":" + time[1]
         return date, time
     
     for index, data in dataset.iterrows():
@@ -45,7 +43,6 @@ def csv_process(dataset):
         
         sample["cloud"] = data["cloud(%)"]
         sample["solar"] = data["solar(W/m2)"]
-        sample["telop_code"] = data["telop_code"]
         try:
             sample["telop_name"] = weather_type[raw_weather_type.index(data["telop_name"])]
         except:

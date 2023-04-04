@@ -3,10 +3,12 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import math
+import argparse
 
 from clean_data import clean_dataset
 
 from utils import fcall
+from configs import get_args_parser
 
 from tsmoothie import smoother as sm
 from tsmoothie import bootstrap as bs
@@ -107,7 +109,6 @@ class SolarProcess():
         
         return dataset
 
-@fcall
 def prepare_dataset(args):
     dataset = clean_dataset(args)
     Process= SolarProcess(args)
@@ -117,3 +118,10 @@ def prepare_dataset(args):
     prepared_data.to_csv(args.data_output_dir + "/{}.csv".format(args.station))
 
     
+# Prepare Data by cleaning and preprocessing
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser('Solar Model for forecasting task', parents=[get_args_parser()])
+    args = parser.parse_args()
+    if args.output_dir:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    prepare_dataset(args)
