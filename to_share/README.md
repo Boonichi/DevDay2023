@@ -27,8 +27,8 @@ we will run same script for `2023-03-01 ~ 2023-03-31`
 │   ├── eval_input
 │   │      input data fixed part (2022-03-01 ~ 2023-01-31
 │   ├── eval_input_ex
-│   │      extra input data (to predict 2023-02-03, use `{hoge}_v00001_2023-02-03.csv`
-│   │      `{hoge}_v00001_2023-02-03.csv` includes 2days before the date.
+│   │      extra input data (to predict 2023-02-05, use `{hoge}_v00001_2023-02-05.csv`
+│   │      `{hoge}_v00001_2023-02-05.csv` includes 2days before the date.
 │   │      ex) `{hoge}_v00001_2023-02-05.csv` has 2023-02-01 ~ 2023-02-03
 │   └── eval_y 
 │   │      truth data to evaluate
