@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_percentage_error
 start_date = datetime.date(2023, 2, 1)
 end_date = datetime.date(2023, 2, 28)
 
-dir_path = Path('../data/2023_devday_data')
+dir_path = Path('data/2023_devday_data')
 input_dir_name = 'eval_input'
 input_dir_ex_name = 'eval_input_ex'
 eval_dir_y_name = 'eval_y'
@@ -40,6 +40,24 @@ def get_csv_input(input_dir_path, input_dir_ex_path, category, date_str):
     assert 1 >= len(ex_input_files) >= 0
     return input_files, ex_input_files
 
+
+def rmr_score(actual, predict):
+    """データフレームから残差平均割合を計算する。
+
+    Args:
+        actual (np.array): 実績
+        predict (np.array): 予測
+
+    Returns:
+        float: 残差平均割合
+    """
+    eps = 1e-9
+    actual = actual + eps
+    diff = actual - predict
+    mx = sum(abs(diff)) / sum(actual)
+    return mx * 100
+
+
 def predict(
     location_path, target_date,
     solar_input_files, solar_ex_input_files, surplus_input_files, surplus_ex_input_files,
@@ -55,13 +73,10 @@ def predict(
     return power_generation, power_demand
 
 
-
 def evaluate():
     # evaluate for each location
-    power_generation_pred = []
-    power_generation_truth = []
-    power_demand_pred = []
-    power_demand_truth = []
+    metric_generation_list = []
+    metric_demand_list = []
 
     for location_path in tqdm(list(dir_path.glob('*'))):
         input_dir_path = location_path / input_dir_name
@@ -101,34 +116,37 @@ def evaluate():
             )
 
             # your prediction method
-            power_generation, power_demand = predict(
+            power_generation_pred, power_demand_pred = predict(
                 location_path, date_str,
                 solar_input_files, solar_ex_input_files, surplus_input_files, surplus_ex_input_files,
                 battery_input_files, battery_ex_input_files, solar_csv_input_files, solar_csv_ex_input_files,
                 cloud_csv_input_files, cloud_csv_ex_input_files, weather_csv_input_files, weather_csv_ex_input_files
             )
 
-            power_generation_pred.extend(power_generation)
-            power_demand_pred.extend(power_demand)
-
             # get truth data
             power_generation_truth_path = eval_dir_y_path / f"solar_{date_str}.csv"
             power_generation_truth_df = pd.read_csv(power_generation_truth_path, header=None).fillna(0)
             assert not power_generation_truth_df.iloc[:, 0].hasnans
-            power_generation_truth_list = power_generation_truth_df.iloc[:, 0].values.tolist()
-            power_generation_truth.extend(power_generation_truth_list)
+            power_generation_truth = power_generation_truth_df.iloc[:, 0].values.tolist()
 
             power_demand_truth_path = eval_dir_y_path / f"demand_{date_str}.csv"
             power_demand_truth_df = pd.read_csv(power_demand_truth_path, header=None).fillna(0)
             assert not power_demand_truth_df.iloc[:, 0].hasnans
-            power_demand_truth_list = power_demand_truth_df.iloc[:, 0].values.tolist()
-            power_demand_truth.extend(power_demand_truth_list)
+            power_demand_truth = power_demand_truth_df.iloc[:, 0].values.tolist()
+
+            # get metric for 1 day
+            metric_generation = rmr_score(actual=np.array(power_generation_truth), predict=np.array(power_generation_pred))
+            metric_demand = rmr_score(actual=np.array(power_demand_truth), predict=np.array(power_demand_pred))
+
+            metric_generation_list.append(metric_generation)
+            metric_demand_list.append(metric_demand)
 
             # increment current_date
             current_date += datetime.timedelta(days=1)
 
-    power_generation_metric = mean_absolute_percentage_error(power_generation_pred, power_generation_truth)
-    power_demand_truth_metric = mean_absolute_percentage_error(power_demand_pred, power_demand_truth)
+    # get final metric (average for each day)
+    power_generation_metric = np.average(np.array(metric_generation_list))
+    power_demand_truth_metric = np.average(np.array(metric_demand_list))
     return (power_generation_metric + power_demand_truth_metric) / 2
 
 
