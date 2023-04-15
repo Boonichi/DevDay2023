@@ -29,9 +29,9 @@ def get_args_parser():
                         help='Dropout (Default: 0.1)')
     parser.add_argument('--clip_grad', type = float, default = 0.1, metavar="NORM",
                         help='Clip gradient norm (default: None, no clipping)')
-    parser.add_argument('--hidden_size', type = int, default = 64,
+    parser.add_argument('--hidden_size', type = int, default = 32,
                         help = "Size of hidden layer of model")
-    parser.add_argument('--hidden_continuous_size', type = int, default=8,
+    parser.add_argument('--hidden_continuous_size', type = int, default=32,
                         help = "Size of hidden continuous layer of model")
     parser.add_argument('--attention_head', type = int, default = 4,
                         help = "Number of attention head in Transformer Architecture")
@@ -48,7 +48,7 @@ def get_args_parser():
                         help = "Optimizer function (ranger, adam)")
     parser.add_argument("--lr", default = 1.e-2, type = int,
                         help = "learning rate of optimizer")
-    parser.add_argument("--patience", default = 3, type = int,
+    parser.add_argument("--patience", default = 10, type = int,
                         help = "Patience number for Early Stopping")
     
 
@@ -73,7 +73,7 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--name', default='', type=str)
-    parser.add_argument('--max_encoder_day', default = 7, type = int)
+    parser.add_argument('--max_encoder_day', default = 25, type = int)
     parser.add_argument('--max_pred_day', default = 3, type = int)
     
     # Prepare process params
