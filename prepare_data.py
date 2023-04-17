@@ -15,6 +15,8 @@ from tsmoothie import bootstrap as bs
 
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer, KNNImputer
+from sklearn.preprocessing import StandardScaler
+import joblib
 
 class SolarProcess():
     def __init__(self, args):
@@ -41,7 +43,10 @@ class SolarProcess():
         if self.args.fill_na == "fill":
             dataset[Numerical_features] = dataset[Numerical_features].fillna(0)
             dataset[Categorical_features] = dataset[Categorical_features].apply(lambda x:x.fillna(x.value_counts().index[0]))
+        elif self.args.fill_na == "remove":
+            dataset = dataset.dropna()
 
+        dataset = dataset.reset_index(drop = True)
         return dataset
     
     def impute(self, dataset):
@@ -95,12 +100,21 @@ class SolarProcess():
         # Time index should be type integer
         dataset = dataset.astype({'half_hours_from_start': 'int32'})
         return dataset
+    def normalization(self, dataset):
+        features = ["power_generation", "power_demand"]
+        ss = StandardScaler()
+        dataset[features] = ss.fit_transform(dataset[features])
+
+        joblib.dump(ss, args.data_output_dir + '{}_scaler.gz'.format(args.station))
+
+        return dataset
     def parse(self,dataset):
         funcs = [
             self.remove_error,
             #self.impute,
             self.fill_na,
             self.smooth,
+            #self.normalization
             #self.customize,
         ]
         

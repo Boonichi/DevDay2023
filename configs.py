@@ -21,8 +21,10 @@ def get_args_parser():
     parser.add_argument('--verbose', action = "store_true",
                         help = "Display prediction from model")
     # Model parameters
-    parser.add_argument('--model', default='TFT', type=str, metavar='MODEL',
+    parser.add_argument('--model', default="TFT", type=str, metavar='MODEL',
                         help='Name of model to train')
+    parser.add_argument('--model_ver', default = 0, type = int,
+                        help ="Number of version of model")
     parser.add_argument('--config', default = None,
                         help = "Add config file that include model params")
     parser.add_argument('--dropout', type=float, default=0.1,
@@ -31,32 +33,35 @@ def get_args_parser():
                         help='Clip gradient norm (default: None, no clipping)')
     parser.add_argument('--hidden_size', type = int, default = 32,
                         help = "Size of hidden layer of model")
-    parser.add_argument('--hidden_continuous_size', type = int, default=32,
+    parser.add_argument('--hidden_continuous_size', type = int, default=16,
                         help = "Size of hidden continuous layer of model")
     parser.add_argument('--attention_head', type = int, default = 4,
                         help = "Number of attention head in Transformer Architecture")
     parser.add_argument('--loss', type = str, default = "QuantileLoss",
                         help = "Loss Function (Quantile Loss, RMSE, MAE)")
-    parser.add_argument('--log_interval', type = int, default = 10,
+    parser.add_argument('--log_interval', type = int, default = 0,
                         help = "Log Interval")
     
     # Hyperparams Optimaztion
     parser.add_argument("--param_optimize", action = "store_true",
                         help = "Find best params for model")
     # Optimization parameters
-    parser.add_argument("--opt", default = "ranger", type = str, metavar = 'OPTIMIZER',
+    parser.add_argument("--opt", default = "adamw", type = str, metavar = 'OPTIMIZER',
                         help = "Optimizer function (ranger, adam)")
+    parser.add_argument('--opt_eps', default=1e-8, type=float, metavar='EPSILON',
+                        help='Optimizer Epsilon (default: 1e-8)')
+    parser.add_argument('--opt_betas', default=None, type=float, nargs='+', metavar='BETA',
+                        help='Optimizer Betas (default: None, use opt default)')
     parser.add_argument("--lr", default = 1.e-2, type = int,
                         help = "learning rate of optimizer")
-    parser.add_argument("--patience", default = 10, type = int,
+    parser.add_argument("--patience", default = 3, type = int,
                         help = "Patience number for Early Stopping")
-    
+    parser.add_argument('--weight_decay', type=float, default=0.05,
+                        help='weight decay (default: 0.05)')
 
     # Dataset parameters
     parser.add_argument("--station", default = "v1", type = str, 
                         help = "Choose station (v1,v2,y6,y7) as target")
-    parser.add_argument('--prepare_data', action="store_true", 
-                        help = "Prepare data")
     parser.add_argument('--target', default = "power_generation", type = str,
                         help = "Choose target feature (power_generation / power_demand)")
     parser.add_argument('--target_mode', default = "single", type = str,
@@ -73,11 +78,15 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--name', default='', type=str)
-    parser.add_argument('--max_encoder_day', default = 25, type = int)
-    parser.add_argument('--max_pred_day', default = 3, type = int)
+    parser.add_argument('--max_encoder_day', default = 14, type = int,
+                        help = "Max length of encoder")
+    parser.add_argument('--max_pred_day', default = 3, type = int,
+                        help = "Max prediction length of encoder")
+    parser.add_argument('--horizon', default = 28, type = int,
+                        help = "Time horizon (28 days of february - the validation month)")
     
     # Prepare process params
-    parser.add_argument("--fill_na", default = "fill", type = str,
+    parser.add_argument("--fill_na", default = "remove", type = str,
                         help="Fill NaN value (fill/remove)")
     parser.add_argument("--normalize_data", default = True, type = bool,
                         help="Normalize dataset")

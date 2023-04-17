@@ -16,14 +16,14 @@ import pandas as pd
 
 from configs import get_args_parser
 from prepare_data import prepare_dataset
-from dataset import create_dataloader
+from dataset import create_dataloader, create_dataset
 from model import SolarModel
 #from postprocess import postprocess
 
 
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
 import tensorflow as tf
@@ -37,6 +37,8 @@ def main(args):
     print(args)
     # Intialize device
     device = torch.device(args.device)
+    accelerator = 'cpu' if args.device == "cpu" else 'gpu'
+    devices = 0 if args.device == "cpu" else 1
 
     #Fix the seed for reproducibility
     seed = args.seed 
@@ -44,11 +46,13 @@ def main(args):
     np.random.seed(seed)
     
     # Create DataLoader
-    trainset, valset, train_dataloader, val_dataloader,  = create_dataloader(args)
+    trainset, valset,  = create_dataset(args)
+    train_dataloader, val_dataloader = create_dataloader(args, trainset, valset) 
 
     # Callbacks
     early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 1e-7, patience=args.patience, verbose = True, mode = "min")
-
+    model_checkpoint = ModelCheckpoint(save_top_k= 1, save_last = True, monitor = 'val_loss', dirpath = None)
+    
     lr_logger = LearningRateMonitor()
 
     if args.target_mode == "multiple":
@@ -59,17 +63,20 @@ def main(args):
     # Trainer
     trainer = pl.Trainer(
         max_epochs=args.epochs,
-        accelerator=device,
+        accelerator=accelerator,
+        devices=1,
         enable_model_summary= True,
         gradient_clip_val= args.clip_grad,
-        callbacks=[early_stop_callback, lr_logger],
+        callbacks=[early_stop_callback,lr_logger, model_checkpoint],
         logger = logger,
         log_every_n_steps=10
     )
     
     # Create Model
     model = SolarModel(args).create(trainset)
-    model.to(device)
+
+    # To GPU device
+    #model.to(device)
 
     # Hyperparameter Tuning
     if args.param_optimize:
@@ -111,8 +118,8 @@ def main(args):
         checkpoint = os.listdir(newest_version)[0]
 
         model = model.load_from_checkpoint(checkpoint)
-
     # Train Process
+    print("Start Train Process")
     start_time = time.time()
     trainer.fit(
         model = model,
