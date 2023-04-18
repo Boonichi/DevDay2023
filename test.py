@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 
 from configs import get_args_parser
-from clean_data import create_csv, create_xlsx
+from clean_data import create_csv, create_xlsx, time_idx
 from prepare_data import prepare_dataset
 from dataset import create_dataloader, create_dataset
 from utils import rmr_score,time_idx 
@@ -138,15 +138,17 @@ def test(args):
         for ckpt_file in os.listdir(checkpoint_dir):
             if ckpt_file.startswith("epoch"):
                 ckpt_dir = checkpoint_dir + ckpt_file
-        
+                
         model = TemporalFusionTransformer.load_from_checkpoint(ckpt_dir)
         for target_date in tqdm(os.listdir(pred_dir)):
             if target_date.startswith(fea):
                 target_date = target_date.split("_")[1]
                 target_date = target_date.split(".")[0]
                 target_date = pd.Timestamp(target_date + " 23:30:00")
+                print(target_date)
 
                 target_half_hours = time_idx(pd.Series(target_date))[0]
+
                 # Encoder Dataset
                 encoder_data = temp_data[lambda x: x["half_hours_from_start"] <= target_half_hours - 48 * args.max_pred_day]
                 encoder_data = encoder_data[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day) * 48)]
