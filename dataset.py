@@ -22,7 +22,6 @@ def create_dataset(args):
     
     # Read Dataset
     data = pd.read_csv(args.data_output_dir + "/{}.csv".format(args.station), index_col = 0, dtype = {'power_generation' : np.float64, 'power_demand': np.float64})
-    
     # Time interval in validation set
     max_pred_len = args.max_pred_day * 48
     
@@ -35,9 +34,9 @@ def create_dataset(args):
     # Intialize features and params for DataLoader based on target mode
     time_idx = "half_hours_from_start"
     group_ids = ["group"]
-    center = False if args.model == "deepar" else True
-    min_pred_len = max_pred_len if args.model == "nhist" or args.model == "nbeat" else 1
-    relative_time = False if args.model == "nhist" or args.model == "nbeat" else True
+    center = False if args.model == "DeepAR" else True
+    min_pred_len = max_pred_len if args.model == "NHIST" or args.model == "NBEAT" else 1
+    relative_time = False if args.model == "NHIST" or args.model == "NBEAT" else True
         
     if args.target_mode == "multiple":
         target = ["power_generation", "power_demand"]
@@ -52,9 +51,11 @@ def create_dataset(args):
     if args.model == "tft":
         unknown_reals = ["solar", "cloud", "power_surplus", args.target]
         unknown_categoricals = ["telop_name"]
+    
     else:
         unknown_reals = [args.target]
         unknown_categoricals = []
+
         
     # Train TimeSeriesDataset
     train_dataset= TimeSeriesDataSet(data = data[lambda x: x["half_hours_from_start"] <= training_cutoff], 
@@ -64,8 +65,8 @@ def create_dataset(args):
                                 max_encoder_length=max_encoder_len,
                                 min_prediction_length=min_pred_len,
                                 max_prediction_length=max_pred_len,
-                                time_varying_known_reals=["month", "weekday", "day"],
-                                time_varying_known_categoricals=["time"],
+                                time_varying_known_reals= ["month", "weekday", "day"],
+                                time_varying_known_categoricals= ["time"],
                                 time_varying_unknown_reals= unknown_reals,
                                 time_varying_unknown_categoricals=unknown_categoricals,
                                 target_normalizer= norms,
