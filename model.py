@@ -1,8 +1,8 @@
 
 import pytorch_lightning as pl
 
-from pytorch_forecasting.models import Baseline, TemporalFusionTransformer, AutoRegressiveBaseModel, DeepAR, RecurrentNetwork
-from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, RMSE, MAE, MAPE
+from pytorch_forecasting.models import Baseline, TemporalFusionTransformer, AutoRegressiveBaseModel, DeepAR, RecurrentNetwork, NHiTS
+from pytorch_forecasting.metrics import QuantileLoss, MultiLoss, RMSE, MAE, MAPE, NegativeBinomialDistributionLoss
 
 class SolarModel():
     def __init__(self, args):
@@ -58,36 +58,34 @@ class SolarModel():
         return Baseline(
         )
     
-    def ARIMA_model(self, training):
-        return AutoRegressiveBaseModel(
-            training,
-            learning_rate= self.lr,
-            loss = self.loss,
-            reduce_on_plateau_patience=self.patience,
-            log_interval = self.log_interval,
-            optimizer = self.opt
-        )
     
     def DeepAR_model(self, training):
         
         return DeepAR.from_dataset(
             training,
-            learning_rate = self.lr,
-            hidden_size= self.hidden_size,
-            dropout=self.dropout,
+            learning_rate = self.args.lr,
+            hidden_size= self.args.hidden_size,
+            dropout=self.args.dropout,
+            loss = NegativeBinomialDistributionLoss(quantiles = [0.25, 0.5, 0.75])
         )
     
     def RNN_model(self, training):
         
-        return RecurrentNetwork()
+        return RecurrentNetwork.from_dataset(
+            training
+        )
     
+    def nhist_model(self, training):
+        return NHiTS.from_dataset(
+            training
+        )
     def create(self, training):
         models = {
             "TFT" : self.TFT_model,
             "base" : self.baseline_model,
-            "ARIMA" : self.ARIMA_model,
             "DeepAR" : self.DeepAR_model,
-            "RNN" : self.RNN_model 
+            "RNN" : self.RNN_model,
+            "NHIST" : self.nhist_model,
         }
         return models[self.args.model](training)
         

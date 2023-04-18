@@ -20,6 +20,8 @@ def get_args_parser():
     # Predict parameters
     parser.add_argument('--verbose', action = "store_true",
                         help = "Display prediction from model")
+    parser.add_argument('--test', action = "store_true",
+                        help = "Test Process")
     # Model parameters
     parser.add_argument('--model', default="TFT", type=str, metavar='MODEL',
                         help='Name of model to train')
@@ -78,9 +80,9 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--name', default='', type=str)
-    parser.add_argument('--max_encoder_day', default = 14, type = int,
+    parser.add_argument('--max_encoder_day', default = 30, type = int,
                         help = "Max length of encoder")
-    parser.add_argument('--max_pred_day', default = 3, type = int,
+    parser.add_argument('--max_pred_day', default = 2, type = int,
                         help = "Max prediction length of encoder")
     parser.add_argument('--horizon', default = 28, type = int,
                         help = "Time horizon (28 days of february - the validation month)")

@@ -70,6 +70,7 @@ class SolarProcess():
         return dataset.join(TempData)
     
     def smooth(self, dataset):
+        if self.args.test: return dataset
         features = ["power_generation", "power_demand"]
         if self.args.smooth == "Exponent":
             smoother = sm.ExponentialSmoother(window_len= self.args.window_size, alpha = 0.3)
@@ -108,6 +109,7 @@ class SolarProcess():
         joblib.dump(ss, args.data_output_dir + '{}_scaler.gz'.format(args.station))
 
         return dataset
+    
     def parse(self,dataset):
         funcs = [
             self.remove_error,
@@ -123,13 +125,16 @@ class SolarProcess():
         
         return dataset
 
-def prepare_dataset(args):
-    dataset = clean_dataset(args)
+def prepare_dataset(args, dataset = None):
+    if args.test == False:
+        dataset = clean_dataset(args)
     Process= SolarProcess(args)
     prepared_data = Process.parse(dataset)
     prepared_data = prepared_data.sort_values(by = "date")
-
-    prepared_data.to_csv(args.data_output_dir + "/{}.csv".format(args.station))
+    if args.test == False:
+        prepared_data.to_csv(args.data_output_dir + "/{}.csv".format(args.station))
+    
+    return prepared_data
 
     
 # Prepare Data by cleaning and preprocessing
