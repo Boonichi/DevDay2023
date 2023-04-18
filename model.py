@@ -31,7 +31,7 @@ class SolarModel():
                 self.output_size = 3
 
             elif self.args.loss == "MAE":
-                self.loss = MAE()
+                self.loss = QuantileLoss(quantiles = [0.5])
                 self.output_size = 1
 
             elif self.args.loss == "RMSE":

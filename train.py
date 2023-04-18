@@ -51,7 +51,7 @@ def main(args):
 
     # Callbacks
     early_stop_callback = EarlyStopping(monitor = "val_loss", min_delta = 1e-7, patience=args.patience, verbose = True, mode = "min")
-    model_checkpoint = ModelCheckpoint(save_top_k= 1, save_last = True, monitor = 'val_loss', dirpath = None)
+    model_checkpoint = ModelCheckpoint(save_top_k= args.save_top_k, save_last = True, monitor = 'val_loss', dirpath = None)
     
     lr_logger = LearningRateMonitor()
 

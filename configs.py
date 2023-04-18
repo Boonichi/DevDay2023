@@ -41,7 +41,7 @@ def get_args_parser():
                         help = "Number of attention head in Transformer Architecture")
     parser.add_argument('--loss', type = str, default = "QuantileLoss",
                         help = "Loss Function (Quantile Loss, RMSE, MAE)")
-    parser.add_argument('--log_interval', type = int, default = 0,
+    parser.add_argument('--log_interval', type = int, default = 1000,
                         help = "Log Interval")
     
     # Hyperparams Optimaztion
@@ -60,6 +60,8 @@ def get_args_parser():
                         help = "Patience number for Early Stopping")
     parser.add_argument('--weight_decay', type=float, default=0.05,
                         help='weight decay (default: 0.05)')
+    parser.add_argument('--save_top_k', default = 1, type = int,
+                        help = "Save k numbers of best checkpoint")
 
     # Dataset parameters
     parser.add_argument("--station", default = "v1", type = str, 

@@ -4,29 +4,118 @@ from pathlib import Path
 import pickle
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 import matplotlib.pyplot as plt
+import plotly.express as px
 
 from configs import get_args_parser
-from clean_data import time_idx
-from dataset import create_dataloader
+from clean_data import create_csv, create_xlsx
+from prepare_data import prepare_dataset
+from dataset import create_dataloader, create_dataset
+from utils import rmr_score,time_idx 
+import utils
 
-from model import SolarModel
+from pytorch_forecasting import TemporalFusionTransformer
 
 import torch
 
-from postprocess import postprocess
+from postprocess import postprocess, compute_metric
 
 from sklearn.metrics import mean_absolute_percentage_error, mean_absolute_error
+
+
+lastdate = pd.Timestamp("2023-01-31 23:30:00")
+last_half_hours = time_idx(pd.Series(lastdate))[0]
+
+def modify_feature(dataset, is_datetime = False):
+    if is_datetime:
+        dataset["year"] = dataset["date"].dt.year
+        dataset["month"] = dataset["date"].dt.month
+        dataset["day"] = dataset["date"].dt.day
+        dataset["time"] = dataset["date"].dt.time
+        dataset["time"] = dataset["time"].apply(lambda x: str(x)[:-3])
+    else:
+        dataset[["year", "month", "day"]] = dataset["date"].str.split("-", expand = True)
+        dataset[["year", "month"]] = dataset[["year", "month"]].astype(int)
+        
+        dataset["day"] = dataset["day"].apply(lambda x: int(x[:2]))
+
+        dataset["date"] = pd.to_datetime(dataset["date"])
+
+    dataset["half_hours_from_start"] = pd.DataFrame(time_idx(dataset["date"]))
+
+    dataset["weekday"] = dataset["date"].dt.dayofweek
+    
+    dataset["group"] = int(0)
+
+    return dataset
+
+def read_external_dataset(args, ex_input, target_date, target_half_hours):
+    ex_input = Path(ex_input)
+    features = [
+        "power_solar",
+        "power_surplus",
+        "cloud",
+        "weather",
+        "solar"
+    ]
+    ex_dir = {}
+    for key in features:
+        if key.startswith("power"):
+            feature = key.split("_")[1]
+            ex_dir[key] = ex_input.glob(f"*{feature}*{target_date}.xlsx")
+        else:
+            ex_dir[key] = ex_input.glob(f"*{key}*{target_date}.csv")
+    try:
+        csv_data = create_csv(ex_dir["cloud"], ex_dir["solar"], ex_dir["weather"])
+    except:
+        return None
+
+    xlsx_data = create_xlsx(ex_dir["power_solar"], ex_dir["power_surplus"])
+
+    ex_input = pd.merge(xlsx_data, csv_data, how = "outer", on = ["date", "time"])
+
+    # Extend ex input to target date
+    
+    ex_input = modify_feature(ex_input, is_datetime=False)
+    
+    ex_input = prepare_dataset(args, ex_input)
+    
+    ex_input = ex_input[lambda x: x["half_hours_from_start"] > last_half_hours]
+    ex_input = ex_input[lambda x: x["half_hours_from_start"] <= target_half_hours]
+
+    return ex_input
+
+def create_target_dataset(input, is_datetime = True):
+    if is_datetime == False:
+        input["date"] = pd.to_datetime(input["date"])
+    target_input = input[lambda x: x["half_hours_from_start"] == x["half_hours_from_start"].max()]
+
+    target_input = pd.concat(
+        [target_input.assign(date=lambda x: x.date + pd.offsets.DateOffset(minutes=30 * i)) for i in range(1, 48 * 2 + 1)],
+        ignore_index=True, 
+    )
+
+    target_input = modify_feature(target_input, is_datetime = True)
+    
+    target_input.to_excel("test.xlsx")
+
+    input = pd.concat([input, target_input], ignore_index=True)
+
+    return target_input
 
 # Predict
 def test(args):
     # Result
     result = {
-        'power_generation_pred': [],
-        'power_generation_actual' : [],
-        'power_demand_pred' : [],
-        'power_demand_actual' : []
+        'power_generation_pred': dict(),
+        'power_generation_actual' : dict(),
+        'power_demand_pred' : dict(),
+        'power_demand_actual' : dict()
     }
+    pred_dir = f"./data/2023_devday_data/{args.station}/eval_y/"
+    ex_path = f"./data/2023_devday_data/{args.station}/eval_input_ex/"
+
     # Intialize device
     device = torch.device(args.device)
 
@@ -35,70 +124,54 @@ def test(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    # DataLoader (Train / Val)
-    trainset, valset, train_dataloader, val_dataloader  = create_dataloader(args)
-
-    # Encoder - Decoder data (Predict Data)
     dataset = pd.read_csv(args.data_output_dir + "/{}.csv".format(args.station), index_col = 0, dtype={args.target: np.float64})
-    
-    dataset["date"] = pd.to_datetime(dataset["date"])
 
-    encoder_data = dataset[lambda x: x["half_hours_from_start"] > x["half_hours_from_start"].max() - args.max_encoder_day * 48]
-    
-    last_data = dataset[lambda x: x["half_hours_from_start"] == x["half_hours_from_start"].max()]
-    last_half_hours = list(last_data["half_hours_from_start"])[0]
-    decoder_data = pd.concat(
-        [last_data.assign(date=lambda x: x.date + pd.offsets.Minute(30 * i)) for i in range(1, (args.max_pred_day * 48) + 1)],
-        ignore_index=True,
-    )
-    
-    decoder_data["day"] = decoder_data["date"].dt.day
-    decoder_data["month"] = decoder_data["date"].dt.month
-    decoder_data["weekday"] = decoder_data["date"].dt.dayofweek
-    decoder_data["time"] = decoder_data["date"].dt.time
+    temp_data = dataset[lambda x: x["half_hours_from_start"] > (last_half_hours - (args.max_encoder_day + 3) * 48 * 2 )]
 
-    for index in range(len(decoder_data["time"])):
-        time = str(decoder_data["time"][index]).split(":")
-        decoder_data["time"][index] = time[0] + ":" + time[1]
+    for fea in ["demand", "solar"]:
+        if fea == "demand":
+            args.target = "power_demand"
+        else: args.target = "power_generation"
+        
+        # Model
+        checkpoint_dir = "model_logs/{}_{}_{}/lightning_logs/version_0/checkpoints/".format(args.station, args.model, args.target)
+        for ckpt_file in os.listdir(checkpoint_dir):
+            if ckpt_file.startswith("epoch"):
+                ckpt_dir = checkpoint_dir + ckpt_file
+        
+        model = TemporalFusionTransformer.load_from_checkpoint(ckpt_dir)
+        for target_date in tqdm(os.listdir(pred_dir)):
+            if target_date.startswith(fea):
+                target_date = target_date.split("_")[1]
+                target_date = target_date.split(".")[0]
+                target_date = pd.Timestamp(target_date + " 23:30:00")
 
-    decoder_data["half_hours_from_start"] = time_idx(decoder_data["date"])
-    
-    decoder_data.to_excel("test.xlsx")
+                target_half_hours = time_idx(pd.Series(target_date))[0]
+                # Encoder Dataset
+                encoder_data = temp_data[lambda x: x["half_hours_from_start"] <= target_half_hours - 48 * args.max_pred_day]
+                encoder_data = encoder_data[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day) * 48)]
+                # External Dataset (External + Target)
+                ex_dataset = read_external_dataset(args, ex_path, target_date.date(), target_half_hours)
+                if type(ex_dataset).__name__ == "NoneType":
+                    target_dataset = create_target_dataset(encoder_data, is_datetime=False)
+                    ex_dataset = target_dataset
+                else:  
+                    target_dataset = create_target_dataset(ex_dataset) 
+                    ex_dataset = pd.concat([ex_dataset, target_dataset], ignore_index=True)
 
-    pred_data = pd.concat([encoder_data, decoder_data], ignore_index=True)
-    
-    # Model
-    model = SolarModel(args).create(trainset)
-    #model.to(device)
-    for target in ["power_generation", "power_demand"]:
-        if args.model == "base":
-            preds = model.predict(pred_data)
+                pred_dataset = pd.concat([encoder_data, ex_dataset], ignore_index = True)
+                pred_dataset = pred_dataset[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day) * 48)]
 
-        else:
-            
-            path = args.output_dir + "model_logs/{}_{}_{}".format(args.station, args.model, target) + "/lightning_logs/"
-            newest_version = max([os.path.join(path,d) for d in os.listdir(path) if d.startswith("version")], key=os.path.getmtime) + "/checkpoints/"
-            print(newest_version)
-            checkpoint = newest_version + os.listdir(newest_version)[0]
+                pred_dataset.to_excel("test.xlsx")
 
-            model = model.load_from_checkpoint(checkpoint)
-            
+                pred, x = model.predict(pred_dataset, mode = "raw", return_x = True)
+                pred = postprocess(result, args.target, pred["prediction"], target_date, args.station)
 
-            preds, actual = model.predict(pred_data, mode = "raw", return_x = True)
+    with open("result.pickle", "wb") as f:
+        pickle.dump(result, f)
+        f.close()
+    compute_metric(result)
 
-            fig = model.plot_prediction(actual, preds, idx=0, add_loss_to_title = True)
-            fig.savefig("./result/{}.jpg".format(target))
-
-            result = postprocess(result, target, preds["prediction"],pred_data[lambda x: x["half_hours_from_start"] > last_half_hours]["date"].dt.date)
-
-            # Print metric that model get
-            print(target)
-            print(mean_absolute_percentage_error(result[target + "_pred"], result[target + "_actual"]))
-            print(mean_absolute_error(result[target + "_pred"], result[target + "_actual"]))
-    
-    # Save result file as Excel format
-    result = pd.DataFrame(result).to_excel("./result/result.xlsx")
-    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('Solar Model for forecasting task', parents=[get_args_parser()])
     args = parser.parse_args()
