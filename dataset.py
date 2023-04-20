@@ -48,7 +48,7 @@ def create_dataset(args):
         target = args.target
         norms = GroupNormalizer(groups=group_ids, transformation="softplus", center = center)
     
-    if args.model == "tft":
+    if args.model == "TFT":
         unknown_reals = ["solar", "cloud", "power_surplus", args.target]
         unknown_categoricals = ["telop_name"]
     

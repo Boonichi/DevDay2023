@@ -8,30 +8,34 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 from utils import rmr_score
 import matplotlib.pyplot as plt
 
-def postprocess(result, target,preds, pred_date, station):
+def postprocess(result, target,preds, pred_date, station, is_quantile = False):
     pred_date = str(pred_date.date())
     result[target + "_pred"][pred_date] = []
     result[target + "_actual"][pred_date] = []     
-
     preds = preds.tolist()
-
-    for pred in preds[0]:
-        result[target + "_pred"][pred_date].append(pred[1])
     
-    result[target + "_pred"][pred_date] = result[target + "_pred"][pred_date][-48:]
+    for pred in preds[0]:
+        if is_quantile == True:
+            result[target + "_pred"][pred_date].append(pred[1]) 
+        else:
+            result[target + "_pred"][pred_date].append(pred[0]) 
 
+    result[target + "_pred"][pred_date] = result[target + "_pred"][pred_date][-48:]
+    
     if target == "power_generation":
         target_dir = "solar"
     else: target_dir = "demand"
-
+    
     
     actual_dir = "./data/2023_devday_data/{}/eval_y/{}_{}.csv".format(station,target_dir, pred_date)
-    actual_value = pd.read_csv(actual_dir, header = None)
+    actual_value = pd.read_csv(actual_dir, header = None).fillna(0)
 
     for actual in actual_value.values:
         result[target + "_actual"][pred_date].append(actual[0])
     
-    return result
+    score = rmr_score(np.asarray(result[target + "_actual"][pred_date]), np.asarray(result[target + "_pred"][pred_date]))
+
+    return score, result
 
 def compute_metric(result):
     #with open("result.pickle", "rb") as f:
@@ -44,7 +48,7 @@ def compute_metric(result):
                 preds.append(value)
             for value in result["power_{}_actual".format(fea)][date]:
                 actuals.append(value)
-                
+
         preds = np.asarray(preds)
         actuals = np.asarray(actuals)
         print(fea)
@@ -60,8 +64,8 @@ def compute_metric(result):
 
         plt.figure(figsize=(12,5))
         
-        ax1 = res["pred"][:200].plot(color='blue', grid=True, label='pred')
-        ax2 = res["actual"][:200].plot(color='red', grid=True, secondary_y=True, label='actual')
+        ax1 = res["pred"][:500].plot(color='blue', grid=True, label='pred')
+        ax2 = res["actual"][:500].plot(color='red', grid=True, secondary_y=True, label='actual')
 
         h1, l1 = ax1.get_legend_handles_labels()
         h2, l2 = ax2.get_legend_handles_labels()
