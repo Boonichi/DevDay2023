@@ -64,8 +64,8 @@ def compute_metric(result):
 
         plt.figure(figsize=(12,5))
         
-        ax1 = res["pred"][:500].plot(color='blue', grid=True, label='pred')
-        ax2 = res["actual"][:500].plot(color='red', grid=True, secondary_y=True, label='actual')
+        ax1 = res["pred"].plot(color='blue', grid=True, label='pred')
+        ax2 = res["actual"].plot(color='red', grid=True, secondary_y=True, label='actual')
 
         h1, l1 = ax1.get_legend_handles_labels()
         h2, l2 = ax2.get_legend_handles_labels()

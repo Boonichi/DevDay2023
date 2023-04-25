@@ -23,6 +23,9 @@ from postprocess import postprocess, compute_metric
 
 from sklearn.metrics import mean_absolute_percentage_error, mean_absolute_error
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 lastdate = pd.Timestamp("2023-01-31 23:30:00")
 last_half_hours = time_idx(pd.Series(lastdate))[0]
@@ -77,8 +80,6 @@ def read_external_dataset(args, ex_input, target_date, target_half_hours):
     # Extend ex input to target date
     ex_input = modify_feature(ex_input, is_datetime=False)
     ex_input = prepare_dataset(args, ex_input)
-    ex_input = ex_input[lambda x: x["half_hours_from_start"] > last_half_hours]
-    ex_input = ex_input[lambda x: x["half_hours_from_start"] <= target_half_hours]
 
     return ex_input
 
@@ -153,20 +154,14 @@ def test(args):
             if target_date.startswith(fea):
                 target_date = target_date.split("_")[1]
                 target_date = target_date.split(".")[0]
-                reduce_half_hours = False
                 
-                if target_date[-2:] == "01": reduce_half_hours = True
-
                 target_date = pd.Timestamp(target_date + " 23:30:00")
                 print(target_date)
 
                 target_half_hours = time_idx(pd.Series(target_date))[0]
 
                 # Encoder Dataset
-                if reduce_half_hours == True:
-                    encoder_data = temp_data[lambda x: x["half_hours_from_start"] <= last_half_hours - 48]
-                else:
-                    encoder_data = temp_data[lambda x: x["half_hours_from_start"] <= last_half_hours]
+                encoder_data = temp_data[lambda x: x["half_hours_from_start"] <= target_half_hours - args.max_pred_day * 48]
                 encoder_data = encoder_data[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day + 3) * 48)]
                 # External Dataset (External + Target)
                 ex_dataset = read_external_dataset(args, ex_path, target_date.date(), target_half_hours)
@@ -182,7 +177,8 @@ def test(args):
                 else:  
                     pred_dataset = pd.concat([encoder_data, ex_dataset], ignore_index = True)
                 pred_dataset = pred_dataset[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day) * 48)]
-                #pred_dataset.to_excel("test.xlsx")
+
+                pred_dataset.to_excel("test.xlsx")
                 if args.model == "NHIST":
                     pred, x = model.predict(pred_dataset, mode = "quantiles", return_x = True, n_samples=1000)
                 else:
