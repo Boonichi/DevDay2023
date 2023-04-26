@@ -8,9 +8,10 @@
     - Time varying known features: Time, date
     - Time varying unknown features: weather, solar and cloud intensity
 
-- Metric to evaluate: (The judges called it Residual Mean Ratio Metric) \
+- Metric to evaluate: (The judges called it Residual Mean Ratio Metric) 
+
     $
-        RMR = \sum_{i = 0}^{N}\frac{pred - actual}{actual}
+        RMR = \frac{sum(pred - actual)}{sum(actual)}
     $
 
 - <strong>The dataset is confidential so i can't public it.</strong>
