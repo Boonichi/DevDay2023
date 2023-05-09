@@ -6,6 +6,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import shutil
 
+# for test
+# input_start_date = pd.to_datetime('2022-02-01').date()
+# input_end_date = pd.to_datetime('2023-01-31').date()
+# eval_start_date = pd.to_datetime('2023-02-01').date()
+# eval_end_date = pd.to_datetime('2023-02-26').date() # 2days before from end of month
+
+# for final
+input_start_date = pd.to_datetime('2022-02-01')
+input_end_date = pd.to_datetime('2023-02-28')
+eval_start_date = pd.to_datetime('2023-03-01')
+eval_end_date = pd.to_datetime('2023-03-29') # 2days before from end of month
+
 if __name__ == '__main__':
     # ディレクトリのパスを指定
     dir_path = Path('../data/2023_devday_data')
@@ -39,28 +51,22 @@ if __name__ == '__main__':
             no_ext_file_name, ext = file_path.stem, file_path.suffix
             save_file_path = result_dir_path / file_name
 
-            # 入力ファイル名と日付の範囲
-            start_date = datetime(2022, 3, 1)
-            end_date = datetime(2023, 1, 31)
-
             # 日付がstart_date以降のシートだけを選択して、新しいExcelファイルに保存する
             filtered_sheets = {sheet_name: sheet for sheet_name, sheet in sheets.items() if
-                               start_date <= datetime.strptime(sheet_name, '%Y-%m-%d') <= end_date}
+                               input_start_date <= datetime.strptime(sheet_name, '%Y-%m-%d') <= input_end_date}
             output_file = save_file_path
             with pd.ExcelWriter(output_file) as writer:
                 for sheet_name, sheet in filtered_sheets.items():
                     sheet.to_excel(writer, sheet_name=sheet_name, index=False)
 
             # 3日目以降の追加教師データ
-            start_date = datetime(2023, 2, 1)
-            end_date = datetime(2023, 2, 26)
             delta = timedelta(days=1)
 
-            current_date = start_date
-            while current_date <= end_date:
+            current_date = eval_start_date
+            while current_date <= eval_end_date:
                 # 対象の日付だけにする
                 filtered_sheets = {sheet_name: sheet for sheet_name, sheet in sheets.items() if
-                                   start_date <= datetime.strptime(sheet_name, '%Y-%m-%d') <= current_date}
+                                   eval_start_date <= datetime.strptime(sheet_name, '%Y-%m-%d') <= current_date}
 
                 two_days_later = current_date + timedelta(days=2)
                 output_file = result_dir_ex_path.joinpath(

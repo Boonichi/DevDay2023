@@ -1,4 +1,11 @@
-
+# Run these script before evaluator script
+```
+pip install -r requirements.txt
+```
+- After install packages, just run evaluator script:
+```
+python Evaluator.py
+```
 # How to Run Evaluator
 - Download files from here  
 https://drive.google.com/drive/folders/1jMahJ4oFGfI-41k5WHhe1NE7dQKAp0qw?usp=sharing
@@ -25,7 +32,7 @@ we will run same script for `2023-03-01 ~ 2023-03-31`
 .
 ├── v1
 │   ├── eval_input
-│   │      input data fixed part (2022-03-01 ~ 2023-01-31
+│   │      input data fixed part (2022-03-01 ~ 2023-01-31)
 │   ├── eval_input_ex
 │   │      extra input data (to predict 2023-02-05, use `{hoge}_v00001_2023-02-05.csv`
 │   │      `{hoge}_v00001_2023-02-05.csv` includes 2days before the date.

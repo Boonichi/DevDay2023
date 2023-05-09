@@ -10,21 +10,21 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Own Package
-from pytorch_forecasting import TemporalFusionTransformer
+from pytorch_forecasting import TemporalFusionTransformer, RecurrentNetwork
 from clean_data import create_csv, create_xlsx
 from utils import time_idx
 from prepare_data import prepare_dataset
 from configs import get_args_parser
 
 # for real evaluation
-# start_date = datetime.date(2023, 3, 1)
-# end_date = datetime.date(2023, 3, 31)
+start_date = datetime.date(2023, 3, 1)
+end_date = datetime.date(2023, 3, 31)
 
 # for test evaluation
-start_date = datetime.date(2023, 3, 1)
-end_date = datetime.date(2023, 3, 4)
+#start_date = datetime.date(2023, 3, 1)
+#end_date = datetime.date(2023, 3, 4)
 
-dir_path = Path('../data_1/2023_devday_data')
+dir_path = Path('../data/2023_devday_data')
 input_dir_name = 'eval_input'
 input_dir_ex_name = 'eval_input_ex'
 eval_dir_y_name = 'eval_y'
@@ -58,15 +58,15 @@ def modify_feature(dataset, is_datetime = False):
 
 def read_external_dataset(args, cloud_dir, solar_dir, weather_dir, power_solar_dir, power_surplus_dir, target_date, target_half_hours):
     try:
-        csv_data = create_csv(cloud_dir, solar_dir, weather_dir)
+        csv_data= create_csv(cloud_dir, solar_dir, weather_dir)
     except:
         return None
-
     xlsx_data = create_xlsx(power_solar_dir, power_surplus_dir)
-
     ex_input = pd.merge(xlsx_data, csv_data, how = "outer", on = ["date", "time"])
     # Extend ex input to target date
+
     ex_input = modify_feature(ex_input, is_datetime=False)
+
     ex_input = prepare_dataset(args, ex_input)
     return ex_input
 
@@ -89,6 +89,7 @@ def create_target_dataset(input, is_datetime = True):
 def get_excel_input(input_dir_path, input_dir_ex_path, category, date_str):
     # input
     input_files = list(input_dir_path.glob(f"*{category}*.xlsx"))
+    #print(input_files)
     if category == 'battery':
         assert 1 >= len(input_files) >= 0
     else:
@@ -143,15 +144,18 @@ def predict(
     ckpt_name = "final"
     
     result = dict()
-
     for target in ["power_demand", "power_generation"]:
         checkpoint_dir = "model_ckpt/{}_{}_{}/{}.ckpt".format(station, model_name, target, ckpt_name)
-        model = TemporalFusionTransformer.load_from_checkpoint(checkpoint_dir)
+        if model_name == "TFT":
+            model = TemporalFusionTransformer.load_from_checkpoint(checkpoint_dir)
+        else:
+            model = RecurrentNetwork.load_from_checkpoint(checkpoint_dir)
                 
         target_half_hours = time_idx(pd.Series(target_date))[0]
         # Encoder Dataset
         encoder_data = temp_data[lambda x: x["half_hours_from_start"] <= target_half_hours - args.max_pred_day * 48]
         encoder_data = encoder_data[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day + 3) * 48)]
+
         # External Dataset (External + Target)
         ex_dataset = read_external_dataset(args, 
                                            cloud_dir = cloud_csv_ex_input_files,
@@ -161,7 +165,6 @@ def predict(
                                            power_surplus_dir = surplus_ex_input_files,
                                            target_date = target_date.date(), 
                                            target_half_hours = target_half_hours)
-        
         if type(ex_dataset).__name__ == "NoneType":
             target_dataset = create_target_dataset(encoder_data, is_datetime=False)
             ex_dataset = target_dataset
@@ -174,10 +177,7 @@ def predict(
         else:  
             pred_dataset = pd.concat([encoder_data, ex_dataset], ignore_index = True)
 
-        if args.model == "NHIST":
-            pred, x = model.predict(pred_dataset, mode = "quantiles", return_x = True, n_samples=1000)
-        else:
-            pred, x = model.predict(pred_dataset, mode = "raw", return_x = True)
+    
         pred_dataset = pred_dataset[lambda x: x["half_hours_from_start"] > (target_half_hours - (args.max_encoder_day + args.max_pred_day) * 48)]
 
         preds, x = model.predict(pred_dataset, mode = "raw", return_x = True)
@@ -186,8 +186,11 @@ def predict(
         preds = preds.tolist()
 
         result[target] = []
+        if model_name == "TFT": result_index = 1
+        else: result_index = 0
+
         for pred in preds[0]:
-            result[target].append(pred[1])
+            result[target].append(pred[result_index])
     
         result[target]= result[target][-48:]
 
@@ -212,7 +215,7 @@ def evaluate(args):
 
         dataset = pd.read_csv("dataset/{}.csv".format(station), index_col = 0)
 
-        temp_data = dataset[lambda x: x["half_hours_from_start"] > (last_half_hours - (args.max_encoder_day + args.max_pred_day + 3) * 48 * 2 )]
+        temp_data = dataset[lambda x: x["half_hours_from_start"] > (last_half_hours - (args.max_encoder_day + 3) * 48 * 2 )]
 
         current_date = start_date
         while current_date <= end_date:
@@ -276,6 +279,8 @@ def evaluate(args):
             # increment current_date
             current_date += datetime.timedelta(days=1)
 
+    print(metric_generation_list)
+    print(metric_demand_list)
     # get final metric (average for each day)
     power_generation_metric = np.average(np.array(metric_generation_list))
     power_demand_truth_metric = np.average(np.array(metric_demand_list))

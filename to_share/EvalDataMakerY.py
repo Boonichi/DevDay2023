@@ -6,6 +6,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import shutil
 
+# for test
+# start_date = datetime(2023, 2, 1)
+# end_date = datetime(2023, 2, 28)
+
+# for final
+start_date = datetime(2023, 3, 1)
+end_date = datetime(2023, 3, 31)
+
+
 if __name__ == '__main__':
     # ディレクトリのパスを指定
     dir_path = Path('../data/2023_devday_data')
@@ -37,8 +46,6 @@ if __name__ == '__main__':
             save_file_path = result_dir_y_path / file_name
 
             # 毎日分のデータを
-            start_date = datetime(2023, 2, 1)
-            end_date = datetime(2023, 2, 28)
             delta = timedelta(days=1)
 
             current_date = start_date

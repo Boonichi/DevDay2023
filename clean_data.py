@@ -61,6 +61,7 @@ def create_csv(cloud_dir, solar_dir, weather_dir):
     cloud_data = pd.read_csv(cloud_dir)
     solar_data = pd.read_csv(solar_dir)
     weather_data = pd.read_csv(weather_dir)
+
     csv_data = pd.merge(weather_data, solar_data, how = 'outer', on = ["target_date", "execution_date"])
     csv_data = pd.merge(csv_data, cloud_data, how = 'outer', on = ["target_date", "execution_date"])
     # CSV Process
